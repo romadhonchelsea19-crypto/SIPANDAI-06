@@ -202,6 +202,17 @@
 
         async function initCloudApp() {
             UI.showLoading();
+            
+            // ANTI-MACET: Paksa loading berhenti maksimal setelah 5 detik
+            setTimeout(() => {
+                const loader = document.getElementById('global-loader');
+                if(loader && !loader.classList.contains('hidden')) {
+                    console.log("Failsafe: Memaksa masuk karena koneksi lambat...");
+                    initMocks();
+                    UI.hideLoading();
+                }
+            }, 5000);
+
             if (!auth) {
                 initMocks();
                 UI.hideLoading(); 
@@ -316,12 +327,13 @@
             }, (error) => {
                 console.error("Snapshot error:", error);
                 initMocks(); // Pastikan admin tetap bisa login jika terjadi error baca DB
+                UI.hideLoading(); // ANTI-MACET: Paksa layar loading hilang jika terjadi error!
             });
         }
 
         let saveTimer;
         window.saveDataToCloud = () => {
-            if (!db || !auth || !auth.currentUser) return;
+            if (!db) return; // <-- PERBAIKAN: Hapus syarat ketat agar sistem lebih mudah menyimpan data
             
             const ind = document.getElementById('cloud-sync-indicator');
             if(ind) { ind.classList.remove('hidden'); ind.innerHTML = '<i class="fas fa-sync fa-spin text-blue-500"></i> Menyimpan...'; }
@@ -344,6 +356,7 @@
                 } catch(e) {
                     console.error("Save error", e);
                     if(ind) { ind.innerHTML = '<i class="fas fa-exclamation-triangle text-red-500"></i> Gagal Simpan'; }
+                    UI.toast("Gagal menyimpan! Buka web Firebase, lalu aktifkan 'Firestore Database (Test Mode)'.", "error"); // <-- TAMBAHAN: Peringatan merah yang jelas
                 }
             }, 1000); 
         };
