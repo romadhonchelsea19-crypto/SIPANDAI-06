@@ -150,7 +150,6 @@
                 printDate: "Manado, 18 Desember 2026",
                 loginBg: "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=2000",
                 dashBg: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?q=80&w=2000",
-                // Pengaturan Logo Default
                 mainLogo: "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp",
                 kopLeftLogo: "Lambang_Kota_Manado.jpg",
                 kopRightLogo: "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp"
@@ -182,8 +181,17 @@
             'mapel_kka': { role: 'Guru Mapel', name: 'Guru KKA', assignedSubject: 'KKA (Koding dan Kecerdasan Artifisial)', password: '123' }
         };
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sipandai-06-app';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        // INI ADALAH KODE RAHASIA FIREBASE ANDA
+        const appId = 'sipandai-06-36543';
+        const firebaseConfig = {
+            apiKey: "AIzaSyAxXMEiorBbQoJO2YqW4TWdNm33X0lNsjY",
+            authDomain: "sipandai-06-36543.firebaseapp.com",
+            projectId: "sipandai-06-36543",
+            storageBucket: "sipandai-06-36543.firebasestorage.app",
+            messagingSenderId: "760127633818",
+            appId: "1:760127633818:web:1ae67b75927bc1ed45e223",
+            measurementId: "G-9H4XRH5K5G"
+        };
         
         let app, db, auth;
         if (firebaseConfig) {
@@ -195,7 +203,6 @@
         async function initCloudApp() {
             UI.showLoading();
             if (!auth) {
-                // initMocks tidak lagi otomatis membuat data siswa awal
                 if (appState.teachers.length === 0) {
                     Object.keys(demoAccounts).forEach((key, index) => {
                         let acc = demoAccounts[key];
@@ -224,8 +231,6 @@
         }
 
         function initMocks() {
-            // Fungsi ini sekarang HANYA membuat data Guru awal jika database guru kosong
-            // TIDAK lagi mengisi data Siswa dummy
             if (appState.teachers.length === 0) {
                 Object.keys(demoAccounts).forEach((key, index) => {
                     let acc = demoAccounts[key];
@@ -271,21 +276,18 @@
                     appState.descriptions = data.descriptions || appState.descriptions;
                     appState.settings = data.settings || appState.settings;
 
-                    // Mengamankan nilai default untuk background dan logo jika belum pernah diatur
                     if (!appState.settings.loginBg) appState.settings.loginBg = "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=2000";
                     if (!appState.settings.dashBg) appState.settings.dashBg = "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?q=80&w=2000";
                     if (!appState.settings.mainLogo) appState.settings.mainLogo = "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp";
                     if (!appState.settings.kopLeftLogo) appState.settings.kopLeftLogo = "Lambang_Kota_Manado.jpg";
                     if (!appState.settings.kopRightLogo) appState.settings.kopRightLogo = "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp";
 
-                    // Update Latar Belakang & Logo Login Secara Real-Time
                     const loginBgEl = document.getElementById('login-screen-bg');
                     if(loginBgEl) loginBgEl.style.backgroundImage = `url('${appState.settings.loginBg}')`;
                     
                     const loginLogoEl = document.getElementById('login-main-logo');
                     if(loginLogoEl) loginLogoEl.src = appState.settings.mainLogo;
 
-                    // Hanya update tampilan UI jika user sudah login
                     if (appState.user) {
                         if(appState.currentView === 'data-siswa') loadStudentTable();
                         if(appState.currentView === 'data-guru') loadTeacherTable();
@@ -294,9 +296,7 @@
                             setTimeout(initDashboardCharts, 100);
                         }
                         if(appState.currentView === 'rekapitulasi') loadRekapTable();
-                        if(appState.currentView === 'pengaturan') {
-                            renderPengaturan(); // Refresh UI pengaturan
-                        }
+                        if(appState.currentView === 'pengaturan') renderPengaturan();
                         
                         const currentT = appState.teachers.find(t => t.id === appState.user.username);
                         if (currentT && (currentT.profilePic !== appState.user.profilePic || currentT.name !== appState.user.name)) {
@@ -820,7 +820,7 @@
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 1280; // Dikompres agar tidak memberatkan Cloud
+                    const MAX_WIDTH = 1280; 
                     const MAX_HEIGHT = 720;
                     let width = img.width;
                     let height = img.height;
@@ -835,7 +835,6 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
                     
-                    // Kualitas 0.6 sangat cukup untuk Background web tanpa memberatkan database
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
                     
                     if (type === 'login') {
@@ -867,7 +866,7 @@
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 400; // Ukuran optimal untuk logo tanpa membebani server
+                    const MAX_WIDTH = 400; 
                     const MAX_HEIGHT = 400;
                     let width = img.width;
                     let height = img.height;
@@ -882,7 +881,6 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
                     
-                    // Menggunakan image/png agar background logo tidak jadi hitam (transparan terjaga)
                     const dataUrl = canvas.toDataURL('image/png'); 
                     
                     if (type === 'main') {
@@ -896,7 +894,7 @@
                     }
                     
                     saveDataToCloud();
-                    if(appState.currentView === 'pengaturan') renderPengaturan(); // Refresh UI pengaturan
+                    if(appState.currentView === 'pengaturan') renderPengaturan(); 
                     UI.toast(`Logo berhasil diubah & disimpan ke Cloud!`, "success");
                 };
                 img.src = e.target.result;
@@ -950,7 +948,6 @@
                                 <input type="text" id="set-print-date" class="w-full border-gray-300 rounded-md p-2 border font-medium bg-gray-50" value="${appState.settings.printDate}">
                             </div>
 
-                            <!-- PENGATURAN LOGO BARU -->
                             <div class="md:col-span-2 border-t pt-4 mt-2">
                                 <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-shapes text-blue-500 mr-1"></i> Pengaturan Logo Aplikasi & Rapot</h3>
                                 <p class="text-xs text-gray-500 mb-4 font-medium">Unggah logo resmi sekolah. Sistem otomatis menjaga transparansi (PNG) agar background logo tidak menghitam.</p>
