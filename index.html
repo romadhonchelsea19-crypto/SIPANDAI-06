@@ -181,8 +181,8 @@
             'mapel_kka': { role: 'Guru Mapel', name: 'Guru KKA', assignedSubject: 'KKA (Koding dan Kecerdasan Artifisial)', password: '123' }
         };
 
-        // INI ADALAH KODE RAHASIA FIREBASE ANDA
-        const appId = 'sipandai-06-36543';
+        // KODE FIREBASE ANDA SESUAI SCREENSHOT
+        const appId = 'sipandai-06-36543'; // Disesuaikan dengan Project ID Anda
         const firebaseConfig = {
             apiKey: "AIzaSyAxXMEiorBbQoJO2YqW4TWdNm33X0lNsjY",
             authDomain: "sipandai-06-36543.firebaseapp.com",
@@ -203,19 +203,9 @@
         async function initCloudApp() {
             UI.showLoading();
             if (!auth) {
-                if (appState.teachers.length === 0) {
-                    Object.keys(demoAccounts).forEach((key, index) => {
-                        let acc = demoAccounts[key];
-                        appState.teachers.push({
-                            id: key, name: acc.name, role: acc.role,
-                            nip: '198' + index + '0412 201' + (index%9) + '05 1 00' + index,
-                            assignedClass: acc.assignedClass || '',
-                            assignedSubject: acc.assignedSubject || '',
-                            password: acc.password 
-                        });
-                    });
-                }
-                UI.hideLoading(); return;
+                initMocks();
+                UI.hideLoading(); 
+                return;
             }
             try {
                 if (typeof __initial_auth_token !== 'undefined') {
@@ -226,6 +216,8 @@
                 listenToCloudDatabase();
             } catch (e) {
                 console.error("Auth Cloud Error", e);
+                // Jika error Auth (karena belum diaktifkan), tetap isi data mock agar admin BISA login!
+                initMocks(); 
                 UI.hideLoading();
             }
         }
@@ -243,7 +235,6 @@
                     });
                 });
             }
-            saveDataToCloud();
         }
 
         function listenToCloudDatabase() {
@@ -272,7 +263,14 @@
                     }
 
                     appState.students = data.students || appState.students;
-                    appState.teachers = data.teachers || appState.teachers;
+                    
+                    // ANTI-GAGAL: Jika teachers di Cloud kosong, isi pakai mock data
+                    if (data.teachers && data.teachers.length > 0) {
+                        appState.teachers = data.teachers;
+                    } else {
+                        initMocks();
+                    }
+
                     appState.descriptions = data.descriptions || appState.descriptions;
                     appState.settings = data.settings || appState.settings;
 
@@ -288,6 +286,7 @@
                     const loginLogoEl = document.getElementById('login-main-logo');
                     if(loginLogoEl) loginLogoEl.src = appState.settings.mainLogo;
 
+                    // Update UI jika user sudah login
                     if (appState.user) {
                         if(appState.currentView === 'data-siswa') loadStudentTable();
                         if(appState.currentView === 'data-guru') loadTeacherTable();
@@ -310,10 +309,13 @@
                         if (headerYearEl) headerYearEl.innerText = `Tahun Ajaran ${appState.settings.academicYear}`;
                     }
                 } else {
+                    // Jika data belum pernah dibuat di cloud
                     initMocks();
+                    saveDataToCloud();
                 }
             }, (error) => {
                 console.error("Snapshot error:", error);
+                initMocks(); // Pastikan admin tetap bisa login jika terjadi error baca DB
             });
         }
 
@@ -390,6 +392,11 @@
                 const usernameInput = document.getElementById('login-username').value.toLowerCase().trim();
                 const passwordInput = document.getElementById('login-password').value.trim();
                 
+                // ANTI-GAGAL: Jika belum ada data sama sekali (belum load dari cloud dll), inisiasi paksa!
+                if (appState.teachers.length === 0) {
+                    initMocks();
+                }
+
                 const accountInfo = appState.teachers.find(t => t.id === usernameInput);
                 
                 if (!accountInfo) {
@@ -2373,7 +2380,6 @@
 
     <!-- Tampilan Login -->
     <div id="login-screen" class="flex-1 flex items-center justify-center relative overflow-hidden bg-slate-900 p-4">
-        <!-- BACKGROUND LOGIN DINAMIS DARI CLOUD -->
         <div id="login-screen-bg" class="absolute inset-0" style="background-image: url('https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=2000'); background-size: cover; background-position: center; opacity: 0.65; transition: background-image 0.5s ease-in-out;"></div>
         <div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-slate-900/10"></div>
         
