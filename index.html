@@ -120,7 +120,7 @@
         window.appState = {
             user: null, currentView: 'dashboard', students: [], teachers: [], grades: {}, descriptions: {}, thresholds: {}, sidebarOpen: false,
             settings: {
-                schoolName: "SD NEGERI 06 MANADO", schoolAddress: "Jl. Sarapung Kel. Wenang Utara Kec. Wenang Kota Manado", academicYear: "2026/2027", semester: "Ganjil",
+                schoolName: "SD NEGERI 06 MANADO", schoolAddress: "Jl. Sarapung No 24 Kec. Wenang Utara Kota Manado", academicYear: "2026/2027", semester: "Ganjil",
                 headmasterName: "Dr. Dra. Hj. Fatimah M., M.Pd", headmasterNip: "19750817 199903 1 005", printDate: "Manado, 18 Desember 2026",
                 loginBg: "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=2000", dashBg: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?q=80&w=2000",
                 mainLogo: "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp", kopLeftLogo: "Lambang_Kota_Manado.jpg", kopRightLogo: "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp"
@@ -128,8 +128,8 @@
         };
 
         const demoAccounts = {
-            'admin': { role: 'Admin', name: 'Administrator System', password: '123' },
             'kepsek': { role: 'Kepsek', name: 'Dr. Dra. Hj. Fatimah M., M.Pd', password: '123' },
+            'admin': { role: 'Admin', name: 'Administrator System', password: '123' },
             'wali_1a': { role: 'Wali Kelas', name: 'Guru Wali 1A', assignedClass: 'IA', password: '123' },
             'mapel_pjok': { role: 'Guru Mapel', name: 'Guru PJOK', assignedSubject: 'PJOK', password: '123' }
         };
@@ -146,11 +146,10 @@
 
         async function initCloudApp() {
             UI.showLoading();
-            setTimeout(() => { UI.hideLoading(); }, 5000); // Failsafe Anti-Macet
+            setTimeout(() => { UI.hideLoading(); }, 5000);
 
             if (!auth) { initMocks(); UI.hideLoading(); return; }
             try {
-                // Langsung gunakan Anonymous Login yang bersih
                 await signInAnonymously(auth);
                 listenToCloudDatabase();
             } catch (e) {
@@ -241,7 +240,7 @@
                 } catch(e) {
                     console.error("Save error", e);
                     if(ind) { ind.innerHTML = '<i class="fas fa-exclamation-triangle text-red-500"></i> Gagal Simpan'; }
-                    UI.toast("Gagal menyimpan! Buka tab Rules Firebase, ubah false jadi true.", "error"); 
+                    UI.toast("Gagal menyimpan! Periksa memori gambar atau jaringan.", "error"); 
                 }
             }, 1000); 
         };
@@ -374,7 +373,6 @@
             const headerYearEl = document.getElementById('header-title-year'); if (headerYearEl) headerYearEl.innerText = `Tahun Ajaran ${appState.settings.academicYear}`;
         }
 
-        // ==================== RUMUS MENGHITUNG RATA-RATA KEAKTIFAN ====================
         window.getKeaktifanAvg = (sId, sub) => {
             const fields = ['bertanya', 'menjawab', 'memperhatikan', 'kerjasama', 'mencatat'];
             let tot = 0, cnt = 0;
@@ -385,7 +383,6 @@
             return cnt > 0 ? Math.round(tot / cnt) : null;
         };
 
-        // ==================== RUMUS MENGHITUNG RATA-RATA SIKAP ====================
         window.getSikapAvg = (sId, sub) => {
             const fields = ['disiplin', 'tanggungjawab', 'jujur', 'peduli', 'kesopanan'];
             let tot = 0, cnt = 0;
@@ -396,7 +393,6 @@
             return cnt > 0 ? Math.round(tot / cnt) : null;
         };
 
-        // ==================== RUMUS UTAMA NILAI AKHIR (DIPERBARUI) ====================
         window.getNilaiAkhir = (sId, sub) => {
             let tpLmTot = 0, tpLmCnt = 0;
             for(let i=1; i<=11; i++) { let v = parseFloat(appState.grades[`${sId}_${sub}_tp${i}`]); if(!isNaN(v)){ tpLmTot+=v; tpLmCnt++; } }
@@ -420,7 +416,6 @@
             if(finalDiv > 0) {
                 let finalScore = Math.round(finalTot / finalDiv);
                 
-                // --- APLIKASIKAN AMBANG BATAS ---
                 const student = appState.students.find(s => s.id === sId);
                 if (student) {
                     const cls = student.class;
@@ -856,7 +851,6 @@
             else if (appState.user.role === 'Guru Mapel') availableSubjects = [appState.user.assignedSubject];
             else availableSubjects = [...SCHOOL_DATA.subjects];
             
-            // TOMBOL KELAS BARU DI MASTER DESKRIPSI
             let classOpts = '';
             if (appState.user.role === 'Wali Kelas') {
                 classOpts = `<option value="${appState.user.assignedClass}">${appState.user.assignedClass}</option>`;
@@ -976,7 +970,7 @@
                     const canvas = document.createElement('canvas'); const MAX = 200; let w = img.width, h = img.height;
                     if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } } else { if (h > MAX) { w *= MAX / h; h = MAX; } }
                     canvas.width = w; canvas.height = h; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    const dataUrl = canvas.toDataURL('image/png');
                     appState.user.profilePic = dataUrl;
                     const idx = appState.teachers.findIndex(t => t.id === appState.user.username); if(idx !== -1) appState.teachers[idx].profilePic = dataUrl;
                     saveDataToCloud(); renderHeader(); if(appState.currentView === 'profil-akun') renderProfilAkun(); UI.toast("Foto diubah!", "success");
@@ -995,7 +989,10 @@
                             <div>
                                 <span class="inline-flex items-center py-1 px-3 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-bold tracking-widest uppercase mb-3 backdrop-blur-sm"><i class="fas fa-chart-line mr-2"></i> Ringkasan Real-Time</span>
                                 <h2 class="text-3xl md:text-5xl font-black mb-2 leading-tight tracking-wide drop-shadow-lg font-montserrat">Selamat Datang di <span class="text-blue-400 text-glow-blue font-russo">SIPANDAI 06</span></h2>
-                                <p class="text-slate-200 text-sm md:text-base font-medium border-l-4 border-blue-400 pl-4 py-1 font-poppins"><strong class="text-blue-300 text-lg uppercase">${appState.settings.schoolName}</strong></p>
+                                <p class="text-slate-200 text-sm md:text-base font-medium border-l-4 border-blue-400 pl-4 py-1 font-poppins">
+                                    <strong class="text-blue-200 text-xs uppercase tracking-widest block mb-1">SISTEM INFORMASI PENDIDIKAN DAN ADMINISTRASI TERINTEGRASI</strong>
+                                    <strong class="text-blue-300 text-lg uppercase block mt-1">${appState.settings.schoolName}</strong>
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -1054,15 +1051,9 @@
             const tbody = document.getElementById('teacher-table-body'); if(!tbody) return;
             let rows = '';
             
-            // Urutkan: Kepsek (1), Admin (2), lainnya (3)
             let sortedTeachers = [...appState.teachers].sort((a, b) => {
-                const getWeight = (role) => {
-                    if(role === 'Kepsek') return 1;
-                    if(role === 'Admin') return 2;
-                    return 3;
-                };
-                const weightA = getWeight(a.role);
-                const weightB = getWeight(b.role);
+                const getWeight = (role) => { if(role === 'Kepsek') return 1; if(role === 'Admin') return 2; return 3; };
+                const weightA = getWeight(a.role); const weightB = getWeight(b.role);
                 if(weightA !== weightB) return weightA - weightB;
                 return a.name.localeCompare(b.name);
             });
@@ -1084,7 +1075,7 @@
 
         window.showTeacherModal = (id = null) => {
             window.editingTeacherId = id; 
-            document.getElementById('form-teacher').reset();
+            const form = document.getElementById('form-teacher'); if (form) form.reset();
             if(id) {
                 const t = appState.teachers.find(x => x.id === id);
                 if(t) {
@@ -1163,7 +1154,7 @@
             window.editingStudentId = id;
             let classOpt = appState.user.role === 'Wali Kelas' ? `<option value="${appState.user.assignedClass}">${appState.user.assignedClass}</option>` : SCHOOL_DATA.classes.map(c => `<option value="${c}">${c}</option>`).join('');
             document.getElementById('new-student-class').innerHTML = classOpt;
-            document.getElementById('form-add-student').reset();
+            const form = document.getElementById('form-add-student'); if (form) form.reset();
             if (id) { const s = appState.students.find(x => x.id === id); if (s) { document.getElementById('add-student-modal-title').innerHTML = '<i class="fas fa-user-edit mr-2"></i> Edit Siswa'; document.getElementById('new-student-name').value = s.name; document.getElementById('new-student-nis').value = s.nis; document.getElementById('new-student-class').value = s.class; document.getElementById('new-student-religion').value = s.religion || 'Kristen'; } } 
             else { document.getElementById('add-student-modal-title').innerHTML = '<i class="fas fa-user-plus mr-2"></i> Tambah Siswa'; }
             UI.show('add-student-modal'); document.getElementById('add-student-modal').classList.add('flex');
@@ -1180,7 +1171,6 @@
                 <div class="bg-white p-6 md:p-8 rounded-xl shadow-sm border max-w-5xl">
                     <form onsubmit="event.preventDefault(); savePengaturan();">
                         
-                        <!-- BAGIAN UPLOAD LOGO & BACKGROUND -->
                         <div class="mb-8">
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
                                 <div class="border border-gray-200 rounded-xl p-5 text-center bg-slate-50 shadow-sm flex flex-col items-center justify-between transition hover:shadow-md">
@@ -1228,7 +1218,6 @@
                             </div>
                         </div>
 
-                        <!-- BAGIAN PENGATURAN TEKS SEKOLAH -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-5 space-y-2">
                             <div class="md:col-span-2"><h3 class="font-bold text-gray-800 flex items-center text-lg mb-2"><i class="fas fa-school text-emerald-500 mr-2"></i> Identitas Sekolah & Tahun Ajaran</h3></div>
                             <div><label class="block text-xs font-bold text-gray-500 mb-1">Nama Sekolah</label><input type="text" id="set-school-name" class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50" value="${appState.settings.schoolName}"></div>
@@ -1261,17 +1250,39 @@
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas'); 
-                    const MAX_SIZE = 1000; // Ukuran resolusi maksimal agar tidak terlalu berat di Cloud
+                    
+                    // --- PERBAIKAN LOGIKA KOMPRESI AGAR TIDAK ERROR 1MB ---
+                    let MAX_SIZE = 1000;
+                    let mimeType = 'image/png';
+                    let quality = 0.92; // Hanya berlaku untuk JPEG
+
+                    if (settingKey === 'loginBg' || settingKey === 'dashBg') {
+                        MAX_SIZE = 800; // Background cukup 800px untuk layar standar, agar ukurannya kecil
+                        mimeType = 'image/jpeg'; // Background WAJIB JPEG agar super kecil ukurannya
+                        quality = 0.6; // Kompresi 60%
+                    } else {
+                        MAX_SIZE = 300; // Logo dikecilkan jadi 300px (sudah sangat tajam untuk ukuran rapot)
+                        mimeType = 'image/png'; // Pertahankan PNG agar pinggirannya tetap transparan
+                    }
+
                     let w = img.width, h = img.height;
                     
                     if (w > h) { if (w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } } 
                     else { if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; } }
                     
                     canvas.width = w; canvas.height = h; 
-                    const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+                    const ctx = canvas.getContext('2d'); 
                     
-                    // Convert ke format base64
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    // Khusus JPEG, beri warna dasar putih (kalau gambar asli transparan, biar tidak jadi hitam)
+                    if (mimeType === 'image/jpeg') {
+                        ctx.fillStyle = "#ffffff";
+                        ctx.fillRect(0, 0, w, h);
+                    }
+
+                    ctx.drawImage(img, 0, 0, w, h);
+                    
+                    // Convert ke format base64 sesuai mimeType (JPEG atau PNG)
+                    const dataUrl = canvas.toDataURL(mimeType, quality);
                     
                     if(settingKey === 'loginBg') {
                         document.getElementById('set-login-bg').value = dataUrl;
@@ -1445,11 +1456,10 @@
             return `
                 <div style="padding: 30px; background: white; color: black; font-family: 'Times New Roman', Times, serif; width: 100%; box-sizing: border-box;">
                     
-                    <!-- KOP SURAT (MENGGUNAKAN TABEL AGAR RAPI DI WORD) -->
                     <table style="width: 100%; border-bottom: 3px double black; margin-bottom: 20px; padding-bottom: 10px; border-collapse: collapse;">
                         <tr>
                             <td style="width: 15%; text-align: center; vertical-align: middle;">
-                                <img src="${appState.settings.kopLeftLogo}" width="80" height="80" style="width: 80px; height: 80px; object-fit: contain;">
+                                <img src="${appState.settings.kopLeftLogo}" style="width: 80px; height: 80px; min-width: 80px; min-height: 80px; max-width: 80px; max-height: 80px; object-fit: contain;">
                             </td>
                             <td style="width: 70%; text-align: center; vertical-align: middle; line-height: 1.2;">
                                 <h3 style="margin:0; font-size:16px; font-weight:bold; font-family: 'Times New Roman', Times, serif;">PEMERINTAH KOTA MANADO</h3>
@@ -1458,14 +1468,13 @@
                                 <p style="margin:0; font-size:12px; font-style:italic; font-family: 'Times New Roman', Times, serif;">${appState.settings.schoolAddress}</p>
                             </td>
                             <td style="width: 15%; text-align: center; vertical-align: middle;">
-                                <img src="${appState.settings.kopRightLogo}" width="80" height="80" style="width: 80px; height: 80px; object-fit: contain;">
+                                <img src="${appState.settings.kopRightLogo}" style="width: 80px; height: 80px; min-width: 80px; min-height: 80px; max-width: 80px; max-height: 80px; object-fit: contain;">
                             </td>
                         </tr>
                     </table>
 
                     <h3 style="text-align:center; margin-bottom:20px; font-weight:bold; text-decoration:underline;">LAPORAN HASIL BELAJAR</h3>
                     
-                    <!-- IDENTITAS SISWA -->
                     <table style="width:100%; font-size:14px; margin-bottom:20px; border-collapse: collapse;">
                         <tr>
                             <td style="width:120px; padding: 2px;">Nama</td><td style="padding: 2px;">: <b>${student.name}</b></td>
@@ -1485,7 +1494,6 @@
                         <tbody>${gradesHtml}</tbody>
                     </table>
                     
-                    <!-- EKSTRA & KEHADIRAN (MENGGUNAKAN TABEL AGAR SEJAJAR DI WORD) -->
                     <table style="width: 100%; margin-bottom: 20px; font-size: 13px; border-collapse: collapse;">
                         <tr>
                             <td style="width: 48%; vertical-align: top;">
@@ -1496,7 +1504,7 @@
                                     <tr><td style="border:1px solid black; padding:6px;">${val('eks2_nama')||'P5 (Kokurikuler)'}</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('eks2_ket')}</td></tr>
                                 </table>
                             </td>
-                            <td style="width: 4%;"></td> <!-- Jarak Antar Tabel -->
+                            <td style="width: 4%;"></td>
                             <td style="width: 48%; vertical-align: top;">
                                 <h4 style="font-weight:bold; margin-bottom:8px;">C. Ketidakhadiran</h4>
                                 <table style="width:100%; border-collapse:collapse;">
@@ -1513,7 +1521,6 @@
                         "${val('catatan')}"
                     </div>
                     
-                    <!-- TANDA TANGAN -->
                     <table style="width:100%; text-align:center; font-size:14px; margin-top:20px; border-collapse: collapse;">
                         <tr>
                             <td style="width:33%; vertical-align: top;">Mengetahui,<br>Orang Tua/Wali<br><br><br><br>_________________</td>
@@ -1534,37 +1541,30 @@
             if(!sId) return; 
             
             const student = appState.students.find(s => s.id === sId);
-            const htmlContent = getSingleRapotHTML(student, UI.val('rapot-class'));
+            let htmlContent = getSingleRapotHTML(student, UI.val('rapot-class'));
             
-            // CSS Khusus untuk Microsoft Word agar menggunakan Kertas Legal (8.5 x 14 inci)
+            let baseUrl = window.location.href.split('?')[0].split('#')[0];
+            baseUrl = baseUrl.substring(0, baseUrl.lastIndexOf("/") + 1);
+            
+            htmlContent = htmlContent.replace(/src="([^"]+)"/g, (match, src) => {
+                if (!src.startsWith('http') && !src.startsWith('data:')) {
+                    return `src="${baseUrl}${src}"`; 
+                }
+                return match;
+            });
+            
             const wordStyles = `
                 <style>
-                    @page WordSection1 {
-                        size: 8.5in 14.0in;
-                        margin: 1.0in 1.0in 1.0in 1.0in;
-                        mso-header-margin: 0.5in;
-                        mso-footer-margin: 0.5in;
-                        mso-paper-source: 0;
-                    }
-                    div.WordSection1 {
-                        page: WordSection1;
-                    }
+                    @page WordSection1 { size: 8.5in 14.0in; margin: 1.0in 1.0in 1.0in 1.0in; mso-header-margin: 0.5in; mso-footer-margin: 0.5in; mso-paper-source: 0; }
+                    div.WordSection1 { page: WordSection1; }
                     table { border-collapse: collapse; }
                 </style>
             `;
 
             const fullHtml = `
                 <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-                <head>
-                    <meta charset='utf-8'>
-                    <title>Rapot ${student.name}</title>
-                    ${wordStyles}
-                </head>
-                <body>
-                    <div class="WordSection1">
-                        ${htmlContent}
-                    </div>
-                </body>
+                <head><meta charset='utf-8'><title>Rapot ${student.name}</title>${wordStyles}</head>
+                <body><div class="WordSection1">${htmlContent}</div></body>
                 </html>
             `; 
             
@@ -1600,7 +1600,7 @@
             <div class="text-center mb-8 relative">
                 <img id="login-main-logo" src="cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp" class="w-24 h-24 mx-auto mb-5 animate-logo-glow object-contain">
                 <h1 class="text-4xl font-russo text-white mb-3">SIPANDAI <span class="text-blue-400">06</span></h1>
-                <p class="text-slate-200 text-[11px] font-bold uppercase tracking-wider leading-relaxed">Sistem Informasi Pendidikan dan Administrasi<br>Terintegrasi</p>
+                <p class="text-slate-200 text-[11px] font-bold uppercase tracking-wider leading-relaxed">SISTEM INFORMASI PENDIDIKAN DAN ADMINISTRASI<br>TERINTEGRASI</p>
                 <p class="text-blue-400 font-bold mt-2 uppercase text-sm">SD Negeri 06 Manado</p>
             </div>
             <form id="login-form" class="space-y-4" onsubmit="event.preventDefault(); doLogin();">
