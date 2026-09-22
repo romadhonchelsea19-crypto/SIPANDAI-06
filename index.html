@@ -118,7 +118,7 @@
         const MAPEL_WALI_KELAS = SCHOOL_DATA.subjects.filter(s => !MAPEL_BIDANG_STUDI.includes(s));
 
         window.appState = {
-            user: null, currentView: 'dashboard', students: [], teachers: [], grades: {}, descriptions: {}, sidebarOpen: false,
+            user: null, currentView: 'dashboard', students: [], teachers: [], grades: {}, descriptions: {}, thresholds: {}, sidebarOpen: false,
             settings: {
                 schoolName: "SD NEGERI 06 MANADO", schoolAddress: "Jl. Sarapung Kel. Wenang Utara Kec. Wenang Kota Manado", academicYear: "2026/2027", semester: "Ganjil",
                 headmasterName: "Dr. Dra. Hj. Fatimah M., M.Pd", headmasterNip: "19750817 199903 1 005", printDate: "Manado, 18 Desember 2026",
@@ -193,6 +193,7 @@
                     appState.students = data.students || appState.students;
                     if (data.teachers && data.teachers.length > 0) appState.teachers = data.teachers; else initMocks();
                     appState.descriptions = data.descriptions || appState.descriptions;
+                    appState.thresholds = data.thresholds || appState.thresholds;
                     appState.settings = data.settings || appState.settings;
 
                     if (!appState.settings.loginBg) appState.settings.loginBg = "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=2000";
@@ -234,7 +235,7 @@
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
                     await setDoc(docRef, {
                         students: appState.students, teachers: appState.teachers, grades: appState.grades,
-                        descriptions: appState.descriptions, settings: appState.settings
+                        descriptions: appState.descriptions, thresholds: appState.thresholds, settings: appState.settings
                     });
                     if(ind) { ind.innerHTML = '<i class="fas fa-cloud-check text-emerald-500"></i> Tersimpan (Cloud)'; setTimeout(()=> ind.classList.add('hidden'), 2500); }
                 } catch(e) {
@@ -315,6 +316,7 @@
             if (viewName === 'input-nilai') renderInputNilai();
             if (viewName === 'nilai-keaktifan') renderNilaiKeaktifan(); 
             if (viewName === 'nilai-sikap') renderNilaiSikap(); 
+            if (viewName === 'ambang-batas') renderAmbangBatas();
             if (viewName === 'rekapitulasi') renderRekapitulasi(); 
             if (viewName === 'non-akademik') renderNonAkademik();
             if (viewName === 'deskripsi') renderDeskripsi();
@@ -349,6 +351,7 @@
             menuHtml += navItem('nilai-keaktifan', 'fa-hand-paper', 'Nilai Keaktifan'); 
             menuHtml += navItem('nilai-sikap', 'fa-heart', 'Penilaian Sikap'); 
             
+            menuHtml += navItem('ambang-batas', 'fa-sliders-h', 'Nilai Ambang Batas');
             if (appState.user.role !== 'Guru Mapel') menuHtml += navItem('rekapitulasi', 'fa-clipboard-list', 'Rekapitulasi Nilai');
             menuHtml += navItem('deskripsi', 'fa-comment-dots', 'Master Deskripsi');
             if (appState.user.role !== 'Guru Mapel') { menuHtml += navItem('non-akademik', 'fa-clipboard-check', 'Kehadiran & Ekstra'); menuHtml += navItem('rapot', 'fa-book-open', 'E-Rapot'); }
@@ -415,7 +418,19 @@
             if(sikap !== null){ finalTot += sikap; finalDiv++; }
 
             if(finalDiv > 0) {
-                return Math.round(finalTot / finalDiv);
+                let finalScore = Math.round(finalTot / finalDiv);
+                
+                // --- APLIKASIKAN AMBANG BATAS ---
+                const student = appState.students.find(s => s.id === sId);
+                if (student) {
+                    const cls = student.class;
+                    const thresh = appState.thresholds[`${sub}_${cls}`];
+                    if (thresh) {
+                        if (thresh.min !== undefined && thresh.min !== '' && finalScore < parseFloat(thresh.min)) finalScore = parseFloat(thresh.min);
+                        if (thresh.max !== undefined && thresh.max !== '' && finalScore > parseFloat(thresh.max)) finalScore = parseFloat(thresh.max);
+                    }
+                }
+                return finalScore;
             }
             return '-';
         };
@@ -1277,6 +1292,48 @@
         window.savePengaturan = () => { appState.settings.schoolName = UI.val('set-school-name'); appState.settings.schoolAddress = UI.val('set-school-address'); appState.settings.academicYear = UI.val('set-academic-year'); appState.settings.semester = UI.val('set-semester'); appState.settings.headmasterName = UI.val('set-headmaster-name'); appState.settings.headmasterNip = UI.val('set-headmaster-nip'); appState.settings.printDate = UI.val('set-print-date'); appState.settings.loginBg = UI.val('set-login-bg'); appState.settings.dashBg = UI.val('set-dash-bg'); saveDataToCloud(); UI.toast('Semua Pengaturan Tersimpan!', 'success'); document.getElementById('header-title-year').innerText = `Tahun Ajaran ${appState.settings.academicYear}`; };
         window.resetDatabase = () => { UI.confirm('Yakin ingin <b>MENGHAPUS SEMUA DATA SISWA DAN NILAI</b>?<br><br><span class="text-sm text-red-500">Tindakan ini tidak bisa dibatalkan!</span>', () => { appState.students = []; appState.grades = {}; saveDataToCloud(); UI.toast('Database Dikosongkan!', 'success'); }); };
 
+        function renderAmbangBatas() {
+            let classOptions = appState.user.role === 'Wali Kelas' ? `<option value="${appState.user.assignedClass}">${appState.user.assignedClass}</option>` : SCHOOL_DATA.classes.map(c => `<option value="${c}">Kelas ${c}</option>`).join('');
+            let availableSubjects = appState.user.role === 'Guru Mapel' ? [appState.user.assignedSubject] : (appState.user.role === 'Wali Kelas' ? [...MAPEL_WALI_KELAS] : [...SCHOOL_DATA.subjects]);
+            let subjectOptions = availableSubjects.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            let content = `
+                <div class="mb-6"><h2 class="text-2xl font-bold text-gray-800 font-russo tracking-wide">Pengaturan Nilai Ambang Batas</h2><p class="text-gray-500 text-sm mt-1">Atur batas minimum dan maksimum Nilai Akhir per mata pelajaran dan kelas. Jika nilai akhir siswa melampaui batas ini, sistem akan memotong/menaikkannya secara otomatis.</p></div>
+                <div class="bg-white p-6 md:p-8 rounded-xl shadow-sm border max-w-4xl">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                        <div><label class="block text-xs font-bold text-gray-500 mb-1">Pilih Mata Pelajaran</label><select id="ambang-subject" onchange="loadAmbangBatas()" class="w-full border p-3 rounded-lg bg-gray-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none">${subjectOptions}</select></div>
+                        <div><label class="block text-xs font-bold text-gray-500 mb-1">Pilih Kelas</label><select id="ambang-class" onchange="loadAmbangBatas()" class="w-full border p-3 rounded-lg bg-gray-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none">${classOptions}</select></div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 border-t pt-6 border-gray-100">
+                        <div class="bg-red-50 p-4 rounded-xl border border-red-100"><label class="block text-xs font-bold text-red-600 mb-2 uppercase tracking-wide"><i class="fas fa-arrow-down mr-1"></i> Batas Nilai Minimum</label><input type="number" id="ambang-min" class="w-full border p-3 rounded-lg bg-white border-red-200 text-red-800 font-black text-xl text-center focus:ring-2 focus:ring-red-500 outline-none" placeholder="Kosongkan jika tidak dibatasi"></div>
+                        <div class="bg-green-50 p-4 rounded-xl border border-green-100"><label class="block text-xs font-bold text-green-600 mb-2 uppercase tracking-wide"><i class="fas fa-arrow-up mr-1"></i> Batas Nilai Maksimum</label><input type="number" id="ambang-max" class="w-full border p-3 rounded-lg bg-white border-green-200 text-green-800 font-black text-xl text-center focus:ring-2 focus:ring-green-500 outline-none" placeholder="Kosongkan jika tidak dibatasi"></div>
+                    </div>
+                    <div class="mt-6 flex justify-end">
+                        <button onclick="saveAmbangBatas()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl font-bold transition shadow-lg hover:-translate-y-0.5"><i class="fas fa-save mr-2"></i> Simpan Ambang Batas</button>
+                    </div>
+                </div>
+            `;
+            UI.html('view-ambang-batas', content);
+            if(document.getElementById('ambang-subject')) loadAmbangBatas();
+        }
+
+        window.loadAmbangBatas = () => {
+            const sub = UI.val('ambang-subject'); const cls = UI.val('ambang-class');
+            if(!sub || !cls) return;
+            const thresh = appState.thresholds[`${sub}_${cls}`];
+            document.getElementById('ambang-min').value = thresh && thresh.min !== undefined ? thresh.min : '';
+            document.getElementById('ambang-max').value = thresh && thresh.max !== undefined ? thresh.max : '';
+        };
+
+        window.saveAmbangBatas = () => {
+            const sub = UI.val('ambang-subject'); const cls = UI.val('ambang-class');
+            const min = UI.val('ambang-min'); const max = UI.val('ambang-max');
+            if(!sub || !cls) return;
+            appState.thresholds[`${sub}_${cls}`] = { min: min, max: max };
+            saveDataToCloud();
+            UI.toast('Ambang batas berhasil disimpan!', 'success');
+        };
+
         function renderRekapitulasi() {
             let classOptions = appState.user.role === 'Wali Kelas' ? `<option value="${appState.user.assignedClass}">${appState.user.assignedClass}</option>` : '<option value="">-- Pilih Kelas --</option>' + SCHOOL_DATA.classes.map(c => `<option value="${c}">Kelas ${c}</option>`).join('');
             let content = `
@@ -1386,21 +1443,38 @@
             const waliData = appState.teachers.find(t => t.role === 'Wali Kelas' && t.assignedClass === cls);
             
             return `
-                <div style="padding: 40px; background: white; color: black; font-family: 'Times New Roman'; width: 100%;">
-                    <div style="display: flex; justify-content: space-between; border-bottom: 3px double black; padding-bottom: 15px; margin-bottom: 25px;">
-                        <div style="width: 80px; display: flex; align-items: center;"><img src="${appState.settings.kopLeftLogo}" style="width:70px;"></div>
-                        <div style="flex: 1; text-align: center; line-height: 1.2;">
-                            <h3 style="margin:0; font-size:16px; font-weight:bold;">PEMERINTAH KOTA MANADO</h3>
-                            <h3 style="margin:0; font-size:16px; font-weight:bold;">DINAS PENDIDIKAN DAN KEBUDAYAAN</h3>
-                            <h2 style="margin:5px 0; font-size:22px; font-weight:900;">${appState.settings.schoolName}</h2>
-                            <p style="margin:0; font-size:12px; font-style:italic;">${appState.settings.schoolAddress}</p>
-                        </div>
-                        <div style="width: 80px; display: flex; align-items: center;"><img src="${appState.settings.kopRightLogo}" style="width:75px;"></div>
-                    </div>
+                <div style="padding: 30px; background: white; color: black; font-family: 'Times New Roman', Times, serif; width: 100%; box-sizing: border-box;">
+                    
+                    <!-- KOP SURAT (MENGGUNAKAN TABEL AGAR RAPI DI WORD) -->
+                    <table style="width: 100%; border-bottom: 3px double black; margin-bottom: 20px; padding-bottom: 10px; border-collapse: collapse;">
+                        <tr>
+                            <td style="width: 15%; text-align: center; vertical-align: middle;">
+                                <img src="${appState.settings.kopLeftLogo}" width="80" height="80" style="width: 80px; height: 80px; object-fit: contain;">
+                            </td>
+                            <td style="width: 70%; text-align: center; vertical-align: middle; line-height: 1.2;">
+                                <h3 style="margin:0; font-size:16px; font-weight:bold; font-family: 'Times New Roman', Times, serif;">PEMERINTAH KOTA MANADO</h3>
+                                <h3 style="margin:0; font-size:16px; font-weight:bold; font-family: 'Times New Roman', Times, serif;">DINAS PENDIDIKAN DAN KEBUDAYAAN</h3>
+                                <h2 style="margin:5px 0; font-size:22px; font-weight:900; font-family: 'Times New Roman', Times, serif;">${appState.settings.schoolName}</h2>
+                                <p style="margin:0; font-size:12px; font-style:italic; font-family: 'Times New Roman', Times, serif;">${appState.settings.schoolAddress}</p>
+                            </td>
+                            <td style="width: 15%; text-align: center; vertical-align: middle;">
+                                <img src="${appState.settings.kopRightLogo}" width="80" height="80" style="width: 80px; height: 80px; object-fit: contain;">
+                            </td>
+                        </tr>
+                    </table>
+
                     <h3 style="text-align:center; margin-bottom:20px; font-weight:bold; text-decoration:underline;">LAPORAN HASIL BELAJAR</h3>
-                    <table style="width:100%; font-size:14px; margin-bottom:20px;">
-                        <tr><td style="width:130px;">Nama</td><td>: <b>${student.name}</b></td><td style="width:100px;">Kelas</td><td>: <b>${cls}</b></td></tr>
-                        <tr><td>NISN</td><td>: ${student.nis}</td><td>Semester</td><td>: ${appState.settings.semester}</td></tr>
+                    
+                    <!-- IDENTITAS SISWA -->
+                    <table style="width:100%; font-size:14px; margin-bottom:20px; border-collapse: collapse;">
+                        <tr>
+                            <td style="width:120px; padding: 2px;">Nama</td><td style="padding: 2px;">: <b>${student.name}</b></td>
+                            <td style="width:100px; padding: 2px;">Kelas</td><td style="padding: 2px;">: <b>${cls}</b></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 2px;">NISN</td><td style="padding: 2px;">: ${student.nis}</td>
+                            <td style="padding: 2px;">Semester</td><td style="padding: 2px;">: ${appState.settings.semester}</td>
+                        </tr>
                     </table>
                     
                     <h4 style="margin-bottom:8px; font-weight:bold;">A. Pencapaian Akademik</h4>
@@ -1411,45 +1485,98 @@
                         <tbody>${gradesHtml}</tbody>
                     </table>
                     
-                    <div style="display:flex; justify-content:space-between; margin-bottom:20px; font-size:13px;">
-                        <div style="width:48%;">
-                            <h4 style="font-weight:bold; margin-bottom:8px;">B. Ekstrakurikuler & Kokurikuler</h4>
-                            <table style="width:100%; border-collapse:collapse;">
-                                <tr><td style="border:1px solid black; padding:6px; font-weight:bold;">Kegiatan</td><td style="border:1px solid black; padding:6px; font-weight:bold; text-align:center;">Keterangan</td></tr>
-                                <tr><td style="border:1px solid black; padding:6px;">${val('eks1_nama')||'Pramuka'}</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('eks1_ket')}</td></tr>
-                                <tr><td style="border:1px solid black; padding:6px;">${val('eks2_nama')||'P5 (Kokurikuler)'}</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('eks2_ket')}</td></tr>
-                            </table>
-                        </div>
-                        <div style="width:48%;">
-                            <h4 style="font-weight:bold; margin-bottom:8px;">C. Ketidakhadiran</h4>
-                            <table style="width:100%; border-collapse:collapse;">
-                                <tr><td style="border:1px solid black; padding:6px;">Sakit</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('sakit')} hari</td></tr>
-                                <tr><td style="border:1px solid black; padding:6px;">Izin</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('izin')} hari</td></tr>
-                                <tr><td style="border:1px solid black; padding:6px;">Alpa Tanpa Keterangan</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('alpa')} hari</td></tr>
-                            </table>
-                        </div>
-                    </div>
+                    <!-- EKSTRA & KEHADIRAN (MENGGUNAKAN TABEL AGAR SEJAJAR DI WORD) -->
+                    <table style="width: 100%; margin-bottom: 20px; font-size: 13px; border-collapse: collapse;">
+                        <tr>
+                            <td style="width: 48%; vertical-align: top;">
+                                <h4 style="font-weight:bold; margin-bottom:8px;">B. Ekstrakurikuler & Kokurikuler</h4>
+                                <table style="width:100%; border-collapse:collapse;">
+                                    <tr><td style="border:1px solid black; padding:6px; font-weight:bold;">Kegiatan</td><td style="border:1px solid black; padding:6px; font-weight:bold; text-align:center;">Keterangan</td></tr>
+                                    <tr><td style="border:1px solid black; padding:6px;">${val('eks1_nama')||'Pramuka'}</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('eks1_ket')}</td></tr>
+                                    <tr><td style="border:1px solid black; padding:6px;">${val('eks2_nama')||'P5 (Kokurikuler)'}</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('eks2_ket')}</td></tr>
+                                </table>
+                            </td>
+                            <td style="width: 4%;"></td> <!-- Jarak Antar Tabel -->
+                            <td style="width: 48%; vertical-align: top;">
+                                <h4 style="font-weight:bold; margin-bottom:8px;">C. Ketidakhadiran</h4>
+                                <table style="width:100%; border-collapse:collapse;">
+                                    <tr><td style="border:1px solid black; padding:6px;">Sakit</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('sakit')} hari</td></tr>
+                                    <tr><td style="border:1px solid black; padding:6px;">Izin</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('izin')} hari</td></tr>
+                                    <tr><td style="border:1px solid black; padding:6px;">Alpa Tanpa Keterangan</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('alpa')} hari</td></tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
 
                     <h4 style="font-weight:bold; font-size:13px; margin-bottom:8px;">D. Catatan Wali Kelas</h4>
                     <div style="border:1px solid black; padding:10px; min-height:60px; font-size:13px; margin-bottom:40px; font-style:italic;">
                         "${val('catatan')}"
                     </div>
                     
-                    <table style="width:100%; text-align:center; font-size:14px; margin-top:20px;">
+                    <!-- TANDA TANGAN -->
+                    <table style="width:100%; text-align:center; font-size:14px; margin-top:20px; border-collapse: collapse;">
                         <tr>
-                            <td style="width:33%;">Mengetahui,<br>Orang Tua/Wali<br><br><br><br>_________________</td>
+                            <td style="width:33%; vertical-align: top;">Mengetahui,<br>Orang Tua/Wali<br><br><br><br>_________________</td>
                             <td style="width:34%;"></td>
-                            <td style="width:33%;">${appState.settings.printDate}<br>Wali Kelas<br><br><br><br><b><u>${waliData?waliData.name:'-'}</u></b><br>NIP. ${waliData?waliData.nip:'-'}</td>
+                            <td style="width:33%; vertical-align: top;">${appState.settings.printDate}<br>Wali Kelas<br><br><br><br><b><u>${waliData?waliData.name:'-'}</u></b><br>NIP. ${waliData?waliData.nip:'-'}</td>
                         </tr>
                         <tr>
-                            <td colspan="3" style="padding-top:40px;">Kepala Sekolah<br><br><br><br><b><u>${appState.settings.headmasterName}</u></b><br>NIP. ${appState.settings.headmasterNip}</td>
+                            <td colspan="3" style="padding-top:40px; vertical-align: top;">Kepala Sekolah<br><br><br><br><b><u>${appState.settings.headmasterName}</u></b><br>NIP. ${appState.settings.headmasterNip}</td>
                         </tr>
                     </table>
                 </div>
             `;
         };
         window.generateRapot = () => { const sId = UI.val('rapot-student'); const cls = UI.val('rapot-class'); if(!sId) { UI.hide('rapot-preview'); return; } UI.html('rapot-preview', getSingleRapotHTML(appState.students.find(s => s.id === sId), cls)); UI.show('rapot-preview'); };
-        window.downloadWordRapot = () => { const sId = UI.val('rapot-student'); if(!sId) return; const html = `<html xmlns:w='urn:schemas-microsoft-com:office:word'><body>${getSingleRapotHTML(appState.students.find(s => s.id === sId), UI.val('rapot-class'))}</body></html>`; const blob = new Blob(['\ufeff', html], {type: 'application/msword'}); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `Rapot.doc`; document.body.appendChild(link); link.click(); document.body.removeChild(link); };
+        
+        window.downloadWordRapot = () => { 
+            const sId = UI.val('rapot-student'); 
+            if(!sId) return; 
+            
+            const student = appState.students.find(s => s.id === sId);
+            const htmlContent = getSingleRapotHTML(student, UI.val('rapot-class'));
+            
+            // CSS Khusus untuk Microsoft Word agar menggunakan Kertas Legal (8.5 x 14 inci)
+            const wordStyles = `
+                <style>
+                    @page WordSection1 {
+                        size: 8.5in 14.0in;
+                        margin: 1.0in 1.0in 1.0in 1.0in;
+                        mso-header-margin: 0.5in;
+                        mso-footer-margin: 0.5in;
+                        mso-paper-source: 0;
+                    }
+                    div.WordSection1 {
+                        page: WordSection1;
+                    }
+                    table { border-collapse: collapse; }
+                </style>
+            `;
+
+            const fullHtml = `
+                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                <head>
+                    <meta charset='utf-8'>
+                    <title>Rapot ${student.name}</title>
+                    ${wordStyles}
+                </head>
+                <body>
+                    <div class="WordSection1">
+                        ${htmlContent}
+                    </div>
+                </body>
+                </html>
+            `; 
+            
+            const blob = new Blob(['\ufeff', fullHtml], {type: 'application/msword'}); 
+            const link = document.createElement('a'); 
+            link.href = URL.createObjectURL(blob); 
+            link.download = `Rapot_${student.name.replace(/\s+/g, '_')}_Kelas_${UI.val('rapot-class')}.doc`; 
+            document.body.appendChild(link); 
+            link.click(); 
+            document.body.removeChild(link); 
+        };
+        
         window.printRapot = () => { html2pdf().set({margin:0, filename:'Rapot.pdf', html2canvas:{scale:2}, jsPDF:{unit:'mm', format:'legal'}}).from(document.getElementById('rapot-preview')).save(); };
         window.printAllRapot = () => { const cls = UI.val('rapot-class'); const stds = appState.students.filter(s => s.class === cls); if(!stds.length) return; let html = '<div style="background:white; color:black;">'; stds.forEach((s, i) => { html += getSingleRapotHTML(s, cls); if (i < stds.length - 1) html += '<div class="html2pdf__page-break"></div>'; }); html += '</div>'; const d = document.createElement('div'); d.innerHTML = html; html2pdf().set({margin:0, filename:`Semua_Rapot_Kelas_${cls}.pdf`, html2canvas:{scale:2}, jsPDF:{unit:'mm', format:'legal'}}).from(d).save(); };
     </script>
@@ -1509,6 +1636,7 @@
                 <div id="view-input-nilai" class="view-section hidden animate-fade-in max-w-[95%] mx-auto"></div>
                 <div id="view-nilai-keaktifan" class="view-section hidden animate-fade-in max-w-[95%] mx-auto"></div>
                 <div id="view-nilai-sikap" class="view-section hidden animate-fade-in max-w-[95%] mx-auto"></div>
+                <div id="view-ambang-batas" class="view-section hidden animate-fade-in max-w-4xl mx-auto"></div>
                 
                 <div id="view-rekapitulasi" class="view-section hidden animate-fade-in max-w-[95%] mx-auto"></div> 
                 <div id="view-non-akademik" class="view-section hidden animate-fade-in max-w-7xl mx-auto"></div>
