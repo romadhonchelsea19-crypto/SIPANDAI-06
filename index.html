@@ -1162,27 +1162,120 @@
         function renderPengaturan() {
             let content = `
                 <div class="mb-6"><h2 class="text-2xl font-bold font-russo tracking-wide">Pengaturan Sistem</h2></div>
-                <div class="bg-white p-8 rounded-xl shadow-sm border max-w-4xl">
-                    <form onsubmit="event.preventDefault(); savePengaturan();" class="space-y-5">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div><label class="block text-xs font-bold text-gray-500 mb-1">Nama Sekolah</label><input type="text" id="set-school-name" class="w-full border p-2" value="${appState.settings.schoolName}"></div>
-                            <div><label class="block text-xs font-bold text-gray-500 mb-1">Alamat Sekolah</label><input type="text" id="set-school-address" class="w-full border p-2" value="${appState.settings.schoolAddress}"></div>
-                            <div><label class="block text-xs font-bold text-gray-500 mb-1">Tahun Ajaran</label><input type="text" id="set-academic-year" class="w-full border p-2" value="${appState.settings.academicYear}"></div>
-                            <div><label class="block text-xs font-bold text-gray-500 mb-1">Semester</label><select id="set-semester" class="w-full border p-2"><option value="Ganjil" ${appState.settings.semester==='Ganjil'?'selected':''}>Ganjil</option><option value="Genap" ${appState.settings.semester==='Genap'?'selected':''}>Genap</option></select></div>
-                            <div class="md:col-span-2 border-t pt-4 mt-2"><h3 class="font-bold mb-3"><i class="fas fa-file-signature"></i> Tanda Tangan Rapot</h3></div>
-                            <div><label class="block text-xs font-bold text-gray-500 mb-1">Kepsek</label><input type="text" id="set-headmaster-name" class="w-full border p-2" value="${appState.settings.headmasterName}"></div>
-                            <div><label class="block text-xs font-bold text-gray-500 mb-1">NIP Kepsek</label><input type="text" id="set-headmaster-nip" class="w-full border p-2" value="${appState.settings.headmasterNip}"></div>
-                            <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 mb-1">Tempat & Tanggal Terbit</label><input type="text" id="set-print-date" class="w-full border p-2" value="${appState.settings.printDate}"></div>
-                            <div class="md:col-span-2 border-t pt-4 mt-2 bg-slate-50 p-4 rounded-lg"><label class="block text-xs font-bold text-gray-500 mb-2">Latar Login</label><input type="text" id="set-login-bg" class="w-full border p-2 mb-2" value="${appState.settings.loginBg}"><label class="block text-xs font-bold text-gray-500 mb-2">Latar Dashboard</label><input type="text" id="set-dash-bg" class="w-full border p-2" value="${appState.settings.dashBg}"></div>
+                <div class="bg-white p-6 md:p-8 rounded-xl shadow-sm border max-w-5xl">
+                    <form onsubmit="event.preventDefault(); savePengaturan();">
+                        
+                        <!-- BAGIAN UPLOAD LOGO & BACKGROUND -->
+                        <div class="mb-8">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+                                <div class="border border-gray-200 rounded-xl p-5 text-center bg-slate-50 shadow-sm flex flex-col items-center justify-between transition hover:shadow-md">
+                                    <label class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-wide">Logo Utama (Aplikasi)</label>
+                                    <div class="h-24 w-full flex items-center justify-center mb-4"><img src="${appState.settings.mainLogo}" class="max-h-full max-w-full object-contain drop-shadow-md"></div>
+                                    <button type="button" onclick="document.getElementById('upload-main-logo').click()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-bold transition"><i class="fas fa-upload mr-2"></i> Ubah Logo</button>
+                                    <input type="file" id="upload-main-logo" class="hidden" accept="image/*" onchange="handleImageSetting(event, 'mainLogo')">
+                                </div>
+                                <div class="border border-gray-200 rounded-xl p-5 text-center bg-slate-50 shadow-sm flex flex-col items-center justify-between transition hover:shadow-md">
+                                    <label class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-wide">Logo Kiri (Kop Rapot)</label>
+                                    <div class="h-24 w-full flex items-center justify-center mb-4"><img src="${appState.settings.kopLeftLogo}" class="max-h-full max-w-full object-contain drop-shadow-md"></div>
+                                    <button type="button" onclick="document.getElementById('upload-kop-left').click()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-bold transition"><i class="fas fa-upload mr-2"></i> Ubah Logo</button>
+                                    <input type="file" id="upload-kop-left" class="hidden" accept="image/*" onchange="handleImageSetting(event, 'kopLeftLogo')">
+                                </div>
+                                <div class="border border-gray-200 rounded-xl p-5 text-center bg-slate-50 shadow-sm flex flex-col items-center justify-between transition hover:shadow-md">
+                                    <label class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-wide">Logo Kanan (Kop Rapot)</label>
+                                    <div class="h-24 w-full flex items-center justify-center mb-4"><img src="${appState.settings.kopRightLogo}" class="max-h-full max-w-full object-contain drop-shadow-md"></div>
+                                    <button type="button" onclick="document.getElementById('upload-kop-right').click()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-bold transition"><i class="fas fa-upload mr-2"></i> Ubah Logo</button>
+                                    <input type="file" id="upload-kop-right" class="hidden" accept="image/*" onchange="handleImageSetting(event, 'kopRightLogo')">
+                                </div>
+                            </div>
+                            
+                            <div class="border-t border-b py-6 mb-8 border-gray-200">
+                                <h3 class="font-bold text-gray-800 mb-2 flex items-center text-lg"><i class="fas fa-image text-blue-500 mr-2"></i> Personalisasi Tampilan (Background)</h3>
+                                <p class="text-sm text-gray-500 mb-5">Anda bisa memasukkan <b>link gambar dari internet</b>, atau langsung <b>mengunggah foto</b> dari komputer Anda (Otomatis dikecilkan ukurannya oleh sistem).</p>
+                                
+                                <div class="space-y-4">
+                                    <div class="border border-gray-200 rounded-xl p-5 bg-slate-50">
+                                        <label class="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-wide">Latar Belakang Halaman Login</label>
+                                        <div class="flex flex-col sm:flex-row gap-3">
+                                            <input type="text" id="set-login-bg" class="flex-1 border border-gray-300 p-3 rounded-lg text-sm bg-white font-mono text-gray-600" value="${appState.settings.loginBg}">
+                                            <button type="button" onclick="document.getElementById('upload-login-bg').click()" class="bg-slate-700 hover:bg-slate-800 text-white px-5 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition"><i class="fas fa-upload mr-2"></i> Upload Foto</button>
+                                            <input type="file" id="upload-login-bg" class="hidden" accept="image/*" onchange="handleImageSetting(event, 'loginBg')">
+                                        </div>
+                                    </div>
+                                    <div class="border border-gray-200 rounded-xl p-5 bg-slate-50">
+                                        <label class="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-wide">Latar Belakang Dashboard Utama</label>
+                                        <div class="flex flex-col sm:flex-row gap-3">
+                                            <input type="text" id="set-dash-bg" class="flex-1 border border-gray-300 p-3 rounded-lg text-sm bg-white font-mono text-gray-600" value="${appState.settings.dashBg}">
+                                            <button type="button" onclick="document.getElementById('upload-dash-bg').click()" class="bg-slate-700 hover:bg-slate-800 text-white px-5 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition"><i class="fas fa-upload mr-2"></i> Upload Foto</button>
+                                            <input type="file" id="upload-dash-bg" class="hidden" accept="image/*" onchange="handleImageSetting(event, 'dashBg')">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="pt-6 mt-4 border-t flex flex-col md:flex-row justify-between gap-4"><button type="button" onclick="resetDatabase()" class="bg-red-50 text-red-600 border border-red-200 px-4 py-3 rounded-lg font-bold"><i class="fas fa-trash-alt mr-2"></i> Kosongkan Data</button><button type="submit" class="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold"><i class="fas fa-save mr-2"></i> Simpan ke Cloud</button></div>
+
+                        <!-- BAGIAN PENGATURAN TEKS SEKOLAH -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5 space-y-2">
+                            <div class="md:col-span-2"><h3 class="font-bold text-gray-800 flex items-center text-lg mb-2"><i class="fas fa-school text-emerald-500 mr-2"></i> Identitas Sekolah & Tahun Ajaran</h3></div>
+                            <div><label class="block text-xs font-bold text-gray-500 mb-1">Nama Sekolah</label><input type="text" id="set-school-name" class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50" value="${appState.settings.schoolName}"></div>
+                            <div><label class="block text-xs font-bold text-gray-500 mb-1">Alamat Sekolah</label><input type="text" id="set-school-address" class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50" value="${appState.settings.schoolAddress}"></div>
+                            <div><label class="block text-xs font-bold text-gray-500 mb-1">Tahun Ajaran</label><input type="text" id="set-academic-year" class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50" value="${appState.settings.academicYear}"></div>
+                            <div><label class="block text-xs font-bold text-gray-500 mb-1">Semester</label><select id="set-semester" class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50 font-bold"><option value="Ganjil" ${appState.settings.semester==='Ganjil'?'selected':''}>Ganjil</option><option value="Genap" ${appState.settings.semester==='Genap'?'selected':''}>Genap</option></select></div>
+                            
+                            <div class="md:col-span-2 border-t pt-6 mt-4"><h3 class="font-bold text-gray-800 flex items-center text-lg mb-4"><i class="fas fa-file-signature text-purple-500 mr-2"></i> Penandatangan Rapot</h3></div>
+                            <div><label class="block text-xs font-bold text-gray-500 mb-1">Nama Kepala Sekolah</label><input type="text" id="set-headmaster-name" class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50" value="${appState.settings.headmasterName}"></div>
+                            <div><label class="block text-xs font-bold text-gray-500 mb-1">NIP Kepala Sekolah</label><input type="text" id="set-headmaster-nip" class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50" value="${appState.settings.headmasterNip}"></div>
+                            <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 mb-1">Tempat & Tanggal Terbit Rapot</label><input type="text" id="set-print-date" class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50" value="${appState.settings.printDate}"></div>
+                        </div>
+
+                        <div class="pt-8 mt-8 border-t border-gray-200 flex flex-col md:flex-row justify-between gap-4">
+                            <button type="button" onclick="resetDatabase()" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-6 py-3.5 rounded-xl font-bold transition"><i class="fas fa-trash-alt mr-2"></i> Kosongkan Data Siswa & Nilai</button>
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/30 transition transform hover:-translate-y-0.5"><i class="fas fa-cloud-upload-alt mr-2"></i> Simpan Semua Pengaturan ke Cloud</button>
+                        </div>
                     </form>
                 </div>
             `;
             UI.html('view-pengaturan', content);
         }
-        window.savePengaturan = () => { appState.settings.schoolName = UI.val('set-school-name'); appState.settings.schoolAddress = UI.val('set-school-address'); appState.settings.academicYear = UI.val('set-academic-year'); appState.settings.semester = UI.val('set-semester'); appState.settings.headmasterName = UI.val('set-headmaster-name'); appState.settings.headmasterNip = UI.val('set-headmaster-nip'); appState.settings.printDate = UI.val('set-print-date'); appState.settings.loginBg = UI.val('set-login-bg'); appState.settings.dashBg = UI.val('set-dash-bg'); saveDataToCloud(); UI.toast('Tersimpan!', 'success'); document.getElementById('header-title-year').innerText = `Tahun Ajaran ${appState.settings.academicYear}`; };
-        window.resetDatabase = () => { UI.confirm('Yakin ingin <b>MENGHAPUS SEMUA DATA SISWA DAN NILAI</b>?', () => { appState.students = []; appState.grades = {}; saveDataToCloud(); UI.toast('Database Dikosongkan!', 'success'); }); };
+
+        window.handleImageSetting = (event, settingKey) => {
+            const file = event.target.files[0]; if (!file) return;
+            if (!file.type.match('image.*')) { UI.toast("File harus berupa gambar!", "error"); return; }
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas'); 
+                    const MAX_SIZE = 1000; // Ukuran resolusi maksimal agar tidak terlalu berat di Cloud
+                    let w = img.width, h = img.height;
+                    
+                    if (w > h) { if (w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } } 
+                    else { if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; } }
+                    
+                    canvas.width = w; canvas.height = h; 
+                    const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+                    
+                    // Convert ke format base64
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    
+                    if(settingKey === 'loginBg') {
+                        document.getElementById('set-login-bg').value = dataUrl;
+                    } else if (settingKey === 'dashBg') {
+                        document.getElementById('set-dash-bg').value = dataUrl;
+                    } else {
+                        appState.settings[settingKey] = dataUrl;
+                        renderPengaturan(); // Render ulang agar logo barunya langsung terlihat di pratinjau
+                    }
+                    
+                    UI.toast("Foto berhasil dimuat. Klik tombol 'Simpan Semua' di bawah!", "success");
+                }; 
+                img.src = e.target.result;
+            }; 
+            reader.readAsDataURL(file);
+        };
+
+        window.savePengaturan = () => { appState.settings.schoolName = UI.val('set-school-name'); appState.settings.schoolAddress = UI.val('set-school-address'); appState.settings.academicYear = UI.val('set-academic-year'); appState.settings.semester = UI.val('set-semester'); appState.settings.headmasterName = UI.val('set-headmaster-name'); appState.settings.headmasterNip = UI.val('set-headmaster-nip'); appState.settings.printDate = UI.val('set-print-date'); appState.settings.loginBg = UI.val('set-login-bg'); appState.settings.dashBg = UI.val('set-dash-bg'); saveDataToCloud(); UI.toast('Semua Pengaturan Tersimpan!', 'success'); document.getElementById('header-title-year').innerText = `Tahun Ajaran ${appState.settings.academicYear}`; };
+        window.resetDatabase = () => { UI.confirm('Yakin ingin <b>MENGHAPUS SEMUA DATA SISWA DAN NILAI</b>?<br><br><span class="text-sm text-red-500">Tindakan ini tidak bisa dibatalkan!</span>', () => { appState.students = []; appState.grades = {}; saveDataToCloud(); UI.toast('Database Dikosongkan!', 'success'); }); };
 
         function renderRekapitulasi() {
             let classOptions = appState.user.role === 'Wali Kelas' ? `<option value="${appState.user.assignedClass}">${appState.user.assignedClass}</option>` : '<option value="">-- Pilih Kelas --</option>' + SCHOOL_DATA.classes.map(c => `<option value="${c}">Kelas ${c}</option>`).join('');
