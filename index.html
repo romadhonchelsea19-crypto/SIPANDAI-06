@@ -121,7 +121,7 @@
             user: null, currentView: 'dashboard', students: [], teachers: [], grades: {}, descriptions: {}, thresholds: {}, sidebarOpen: false,
             settings: {
                 schoolName: "SD NEGERI 06 MANADO", schoolAddress: "Jl. Sarapung No 24 Kec. Wenang Utara Kota Manado", academicYear: "2026/2027", semester: "Ganjil",
-                headmasterName: "Dr. Dra. Hj. Fatimah M., M.Pd", headmasterNip: "19750817 199903 1 005", printDate: "Manado, 18 Desember 2026",
+                reportTitle: "LAPORAN HASIL BELAJAR", midReportTitle: "LAPORAN HASIL BELAJAR TENGAH SEMESTER", headmasterName: "Dr. Dra. Hj. Fatimah M., M.Pd", headmasterNip: "19750817 199903 1 005", printDate: "Manado, 18 Desember 2026",
                 loginBg: "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=2000", dashBg: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?q=80&w=2000",
                 mainLogo: "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp", kopLeftLogo: "Lambang_Kota_Manado.jpg", kopRightLogo: "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp"
             }
@@ -200,6 +200,8 @@
                     if (!appState.settings.mainLogo) appState.settings.mainLogo = "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp";
                     if (!appState.settings.kopLeftLogo) appState.settings.kopLeftLogo = "Lambang_Kota_Manado.jpg";
                     if (!appState.settings.kopRightLogo) appState.settings.kopRightLogo = "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp";
+                    if (!appState.settings.reportTitle) appState.settings.reportTitle = "LAPORAN HASIL BELAJAR";
+                    if (!appState.settings.midReportTitle) appState.settings.midReportTitle = "LAPORAN HASIL BELAJAR TENGAH SEMESTER";
 
                     const loginBgEl = document.getElementById('login-screen-bg');
                     if(loginBgEl) loginBgEl.style.backgroundImage = `url('${appState.settings.loginBg}')`;
@@ -266,6 +268,22 @@
 
         window.editingTeacherId = null; window.changePasswordId = null; window.editingStudentId = null;
 
+        window.togglePasswordVisibility = (inputId, iconId) => {
+            const input = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+            if (input && icon) {
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.classList.remove('fa-eye');
+                    icon.classList.add('fa-eye-slash');
+                } else {
+                    input.type = 'password';
+                    icon.classList.remove('fa-eye-slash');
+                    icon.classList.add('fa-eye');
+                }
+            }
+        };
+
         window.doLogin = () => {
             UI.showLoading();
             setTimeout(() => {
@@ -287,6 +305,8 @@
             appState.user = null; UI.hide('app-screen'); UI.show('login-screen');
             if(window.dashChart1) window.dashChart1.destroy(); if(window.dashChart2) window.dashChart2.destroy();
             document.getElementById('login-form').reset();
+            const passInput = document.getElementById('login-password'); const eyeIcon = document.getElementById('eye-icon-login');
+            if(passInput) passInput.type = 'password'; if(eyeIcon) { eyeIcon.classList.remove('fa-eye-slash'); eyeIcon.classList.add('fa-eye'); }
         };
 
         function initAppUI() {
@@ -353,7 +373,7 @@
             menuHtml += navItem('ambang-batas', 'fa-sliders-h', 'Nilai Ambang Batas');
             if (appState.user.role !== 'Guru Mapel') menuHtml += navItem('rekapitulasi', 'fa-clipboard-list', 'Rekapitulasi Nilai');
             menuHtml += navItem('deskripsi', 'fa-comment-dots', 'Master Deskripsi');
-            if (appState.user.role !== 'Guru Mapel') { menuHtml += navItem('non-akademik', 'fa-clipboard-check', 'Kehadiran & Ekstra'); menuHtml += navItem('rapot', 'fa-book-open', 'E-Rapot'); }
+            if (appState.user.role !== 'Guru Mapel') { menuHtml += navItem('non-akademik', 'fa-clipboard-check', 'Kehadiran & Ekstra'); menuHtml += navItem('rapot', 'fa-book-open', 'E-Rapot (PAS & PTS)'); }
             UI.html('sidebar-menu', menuHtml);
         }
 
@@ -565,11 +585,18 @@
 
             if(cAvg && cPred && cKet) {
                 if(avg !== '-') {
+                    const kktpA = appState.thresholds[`${sub}_${cls}_kktp_A`] !== undefined ? parseFloat(appState.thresholds[`${sub}_${cls}_kktp_A`]) : 90;
+                    const kktpB = appState.thresholds[`${sub}_${cls}_kktp_B`] !== undefined ? parseFloat(appState.thresholds[`${sub}_${cls}_kktp_B`]) : 80;
+                    const kktpC = appState.thresholds[`${sub}_${cls}_kktp_C`] !== undefined ? parseFloat(appState.thresholds[`${sub}_${cls}_kktp_C`]) : 70;
+
                     let pred = 'D', bg = 'text-red-700 bg-red-50';
-                    if(avg>=90){ pred='A'; bg='text-green-700 bg-green-50'; } else if(avg>=80){ pred='B'; bg='text-blue-700 bg-blue-50'; } else if(avg>=70){ pred='C'; bg='text-yellow-700 bg-yellow-50'; }
+                    if(avg >= kktpA){ pred='A'; bg='text-green-700 bg-green-50'; } 
+                    else if(avg >= kktpB){ pred='B'; bg='text-blue-700 bg-blue-50'; } 
+                    else if(avg >= kktpC){ pred='C'; bg='text-yellow-700 bg-yellow-50'; }
                     
-                    let desc = appState.descriptions[`${sub}_${cls}_${pred}`] || appState.descriptions[`${sub}_${pred}`] || `Capaian belajar siswa menunjukkan hasil yang ${pred === 'A' ? 'Sangat Baik' : pred === 'B' ? 'Baik' : pred === 'C' ? 'Cukup' : 'Perlu Bimbingan'} pada pelajaran {mapel}.`;
+                    let desc = appState.descriptions[`${sub}_${cls}_${pred}`] || appState.descriptions[`${sub}_${pred}`] || `{nama} menunjukkan capaian yang ${pred === 'A' ? 'Sangat Baik' : pred === 'B' ? 'Baik' : pred === 'C' ? 'Cukup' : 'Perlu Bimbingan'} pada pelajaran {mapel}.`;
                     desc = desc.replace(/{mapel}/g, `<strong class="text-[10px] uppercase">${sub}</strong>`); 
+                    desc = desc.replace(/{nama}/g, `<strong class="text-[10px] uppercase">${student ? student.name : ''}</strong>`); 
                     
                     cAvg.innerText = avg; cAvg.className = `border p-2 text-center font-bold ${bg}`;
                     cPred.innerText = pred; cPred.className = `border p-2 text-center font-black ${bg}`;
@@ -671,14 +698,23 @@
             else { classOptions = '<option value="">-- Pilih Kelas --</option>'; SCHOOL_DATA.classes.forEach(c => classOptions += `<option value="${c}">Kelas ${c}</option>`); }
 
             let content = `
-                <div class="mb-6"><h2 class="text-2xl font-bold text-gray-800 font-russo tracking-wide">Input Nilai Keaktifan Siswa</h2><p class="text-gray-500 text-sm mt-1">Nilai otomatis terhubung dan dirata-rata di Nilai Akhir Akademik.</p></div>
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 no-print gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800 font-russo tracking-wide">Input Nilai Keaktifan Siswa</h2>
+                        <p class="text-gray-500 text-sm mt-1">Nilai otomatis terhubung dan dirata-rata di Nilai Akhir Akademik.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 w-full md:w-auto">
+                        <button onclick="downloadExcelKeaktifan()" class="flex-1 md:flex-none justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center transition font-semibold text-sm"><i class="fas fa-file-excel mr-2"></i> Unduh Excel</button>
+                        <button onclick="printPDFKeaktifan()" class="flex-1 md:flex-none justify-center bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center transition font-semibold text-sm"><i class="fas fa-file-pdf mr-2"></i> Cetak PDF</button>
+                    </div>
+                </div>
                 <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-4 flex gap-4">
                     <select id="filter-class-aktif" onchange="handleClassChangeAktif()" class="w-1/2 border-gray-300 rounded-md p-2 border font-semibold bg-gray-50">${classOptions}</select>
                     <select id="filter-subject-aktif" onchange="loadKeaktifanTable()" class="w-1/2 border-gray-300 rounded-md p-2 border font-semibold text-blue-900 bg-blue-50"></select>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <div class="table-container overflow-x-auto w-full relative" style="max-height: 60vh;">
-                        <table class="min-w-max w-full text-sm text-left border-collapse bg-white">
+                        <table id="keaktifan-table-export" class="min-w-max w-full text-sm text-left border-collapse bg-white">
                             <thead class="text-xs text-gray-800 sticky-header shadow-md">
                                 <tr>
                                     <th colspan="3" class="p-3 border border-gray-300 text-center bg-[#fce4d6] font-black tracking-widest sticky-col-header z-30">IDENTITAS SISWA</th>
@@ -761,14 +797,23 @@
             else { classOptions = '<option value="">-- Pilih Kelas --</option>'; SCHOOL_DATA.classes.forEach(c => classOptions += `<option value="${c}">Kelas ${c}</option>`); }
 
             let content = `
-                <div class="mb-6"><h2 class="text-2xl font-bold text-gray-800 font-russo tracking-wide">Input Penilaian Sikap Siswa</h2><p class="text-gray-500 text-sm mt-1">Nilai otomatis terhubung dan dirata-rata di Nilai Akhir Akademik.</p></div>
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 no-print gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800 font-russo tracking-wide">Input Penilaian Sikap Siswa</h2>
+                        <p class="text-gray-500 text-sm mt-1">Nilai otomatis terhubung dan dirata-rata di Nilai Akhir Akademik.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 w-full md:w-auto">
+                        <button onclick="downloadExcelSikap()" class="flex-1 md:flex-none justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center transition font-semibold text-sm"><i class="fas fa-file-excel mr-2"></i> Unduh Excel</button>
+                        <button onclick="printPDFSikap()" class="flex-1 md:flex-none justify-center bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center transition font-semibold text-sm"><i class="fas fa-file-pdf mr-2"></i> Cetak PDF</button>
+                    </div>
+                </div>
                 <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-4 flex gap-4">
                     <select id="filter-class-sikap" onchange="handleClassChangeSikap()" class="w-1/2 border-gray-300 rounded-md p-2 border font-semibold bg-gray-50">${classOptions}</select>
                     <select id="filter-subject-sikap" onchange="loadSikapTable()" class="w-1/2 border-gray-300 rounded-md p-2 border font-semibold text-blue-900 bg-blue-50"></select>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <div class="table-container overflow-x-auto w-full relative" style="max-height: 60vh;">
-                        <table class="min-w-max w-full text-sm text-left border-collapse bg-white">
+                        <table id="sikap-table-export" class="min-w-max w-full text-sm text-left border-collapse bg-white">
                             <thead class="text-xs text-gray-800 sticky-header shadow-md">
                                 <tr>
                                     <th colspan="3" class="p-3 border border-gray-300 text-center bg-[#fce4d6] font-black tracking-widest sticky-col-header z-30">IDENTITAS SISWA</th>
@@ -881,13 +926,31 @@
                         <i class="fas fa-cloud-upload-alt mr-2"></i> Simpan ke Cloud
                     </button>
                 </div>
+
+                <div class="bg-indigo-50 p-5 rounded-xl shadow-sm border border-indigo-100 mb-6 flex flex-col md:flex-row gap-4 items-center">
+                    <div class="font-bold text-indigo-900 w-full md:w-1/3 text-sm"><i class="fas fa-sliders-h mr-2"></i> Pengaturan Rentang Nilai (KKTP)</div>
+                    <div class="flex-1 flex gap-3 w-full">
+                        <div class="flex-1"><label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">Min. A (Sangat Baik)</label><input type="number" id="kktp-a" class="w-full border p-2.5 rounded-lg bg-white text-center font-bold text-green-700 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="90"></div>
+                        <div class="flex-1"><label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">Min. B (Baik)</label><input type="number" id="kktp-b" class="w-full border p-2.5 rounded-lg bg-white text-center font-bold text-blue-700 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="80"></div>
+                        <div class="flex-1"><label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">Min. C (Cukup)</label><input type="number" id="kktp-c" class="w-full border p-2.5 rounded-lg bg-white text-center font-bold text-yellow-700 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="70"></div>
+                    </div>
+                </div>
+                
+                <div class="mb-4 flex flex-wrap gap-2 items-center bg-yellow-50 p-3 rounded-lg border border-yellow-200 shadow-sm">
+                    <span class="text-xs font-bold text-yellow-800 mr-2"><i class="fas fa-magic mr-1"></i> Sisipkan Kode Otomatis:</span>
+                    <button onclick="insertTagToDesc('{nama}')" class="bg-white hover:bg-yellow-100 border border-yellow-300 px-3 py-1.5 rounded-md text-xs font-bold font-mono text-yellow-900 shadow-sm transition"><i class="fas fa-user mr-1"></i> {nama}</button>
+                    <button onclick="insertTagToDesc('{mapel}')" class="bg-white hover:bg-yellow-100 border border-yellow-300 px-3 py-1.5 rounded-md text-xs font-bold font-mono text-yellow-900 shadow-sm transition"><i class="fas fa-book mr-1"></i> {mapel}</button>
+                    <span class="text-[10px] text-gray-500 ml-auto hidden md:block italic">Letakkan kursor di kotak teks di bawah, lalu klik tombol ini.</span>
+                </div>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     ${['A', 'B', 'C', 'D'].map(p => `
                         <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 ${p==='A'?'border-green-500':p==='B'?'border-blue-500':p==='C'?'border-yellow-500':'border-red-500'}">
-                            <h3 class="font-bold text-gray-800 mb-2 flex items-center justify-between font-poppins">
-                                <span>Predikat ${p}</span> <span class="text-[10px] bg-slate-100 px-2 py-1 rounded text-slate-500 font-mono">Otomatis saat ${p==='A'?'>=90':p==='B'?'80-89':p==='C'?'70-79':'<70'}</span>
+                            <h3 class="font-bold text-gray-800 mb-2 flex items-center justify-between font-poppins text-sm">
+                                <span>Predikat ${p} (${p==='A'?'Sangat Baik':p==='B'?'Baik':p==='C'?'Cukup':'Kurang/Perlu Bimbingan'})</span> 
+                                <span class="text-[10px] bg-slate-100 px-2 py-1 rounded text-slate-500 font-mono" id="label-kktp-${p}"></span>
                             </h3>
-                            <textarea id="desc-${p}" class="w-full p-3 border border-gray-200 bg-gray-50 rounded-lg text-sm min-h-[100px] font-medium" placeholder="Ketik deskripsi..."></textarea>
+                            <textarea id="desc-${p}" onfocus="window.lastFocusedDesc = 'desc-${p}'" class="w-full p-3 border border-gray-200 bg-gray-50 rounded-lg text-sm min-h-[100px] font-medium focus:ring-2 focus:ring-blue-400 outline-none transition" placeholder="Ketik deskripsi..."></textarea>
                         </div>
                     `).join('')}
                 </div>
@@ -900,16 +963,50 @@
             const sub = UI.val('deskripsi-subject'); const cls = UI.val('deskripsi-class');
             if(!sub || !cls) return;
             
+            const kA = appState.thresholds[`${sub}_${cls}_kktp_A`] !== undefined ? appState.thresholds[`${sub}_${cls}_kktp_A`] : 90;
+            const kB = appState.thresholds[`${sub}_${cls}_kktp_B`] !== undefined ? appState.thresholds[`${sub}_${cls}_kktp_B`] : 80;
+            const kC = appState.thresholds[`${sub}_${cls}_kktp_C`] !== undefined ? appState.thresholds[`${sub}_${cls}_kktp_C`] : 70;
+            
+            document.getElementById('kktp-a').value = kA; 
+            document.getElementById('kktp-b').value = kB; 
+            document.getElementById('kktp-c').value = kC;
+            
+            document.getElementById('label-kktp-A').innerText = `>= ${kA}`;
+            document.getElementById('label-kktp-B').innerText = `${kB} - ${kA-1}`;
+            document.getElementById('label-kktp-C').innerText = `${kC} - ${kB-1}`;
+            document.getElementById('label-kktp-D').innerText = `< ${kC}`;
+            
             ['A','B','C','D'].forEach(p => { 
-                document.getElementById(`desc-${p}`).value = appState.descriptions[`${sub}_${cls}_${p}`] || appState.descriptions[`${sub}_${p}`] || `Siswa menunjukkan capaian yang ${p==='A'?'sangat baik':p==='B'?'baik':p==='C'?'cukup':'perlu bimbingan'} pada mata pelajaran {mapel}.`; 
+                document.getElementById(`desc-${p}`).value = appState.descriptions[`${sub}_${cls}_${p}`] || appState.descriptions[`${sub}_${p}`] || `{nama} menunjukkan capaian yang ${p==='A'?'Sangat Baik':p==='B'?'Baik':p==='C'?'Cukup':'Perlu Bimbingan'} pada mata pelajaran {mapel}.`; 
             });
         };
+
         window.saveDesc = () => {
             const sub = UI.val('deskripsi-subject'); const cls = UI.val('deskripsi-class');
             if(!sub || !cls) return;
+            
+            appState.thresholds[`${sub}_${cls}_kktp_A`] = UI.val('kktp-a');
+            appState.thresholds[`${sub}_${cls}_kktp_B`] = UI.val('kktp-b');
+            appState.thresholds[`${sub}_${cls}_kktp_C`] = UI.val('kktp-c');
+            
             ['A','B','C','D'].forEach(p => { appState.descriptions[`${sub}_${cls}_${p}`] = UI.val(`desc-${p}`); });
             saveDataToCloud(); 
-            UI.toast(`Deskripsi ${sub} khusus Kelas ${cls} tersimpan di Cloud!`, 'success');
+            loadDesc();
+            UI.toast(`Deskripsi & KKTP ${sub} Kelas ${cls} tersimpan di Cloud!`, 'success');
+        };
+
+        window.lastFocusedDesc = 'desc-A';
+        window.insertTagToDesc = (tag) => {
+            const el = document.getElementById(window.lastFocusedDesc);
+            if(el) {
+                const start = el.selectionStart;
+                const end = el.selectionEnd;
+                el.value = el.value.substring(0, start) + tag + el.value.substring(end);
+                el.focus();
+                el.selectionStart = el.selectionEnd = start + tag.length;
+            } else {
+                UI.toast('Klik salah satu kotak deskripsi terlebih dahulu!', 'error');
+            }
         };
 
         function renderProfilAkun() {
@@ -936,7 +1033,13 @@
                                 </div>
                                 <div class="border-t pt-5 mt-5">
                                     <h3 class="font-bold text-gray-800 mb-4 font-poppins"><i class="fas fa-key text-yellow-500 mr-2"></i> Keamanan Sandi</h3>
-                                    <div><label class="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Sandi Baru</label><input type="password" id="my-new-password" placeholder="Kosongkan jika tidak ganti" class="w-full border rounded-lg p-3"></div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Sandi Baru</label>
+                                        <div class="relative">
+                                            <input type="password" id="my-new-password" placeholder="Kosongkan jika tidak ganti" class="w-full border rounded-lg p-3 pr-10">
+                                            <button type="button" onclick="togglePasswordVisibility('my-new-password', 'eye-icon-profile')" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-blue-500"><i id="eye-icon-profile" class="fas fa-eye"></i></button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -957,6 +1060,9 @@
                 if (newPass && newPass.trim() !== '') { appState.teachers[teacherIndex].password = newPass.trim(); appState.user.password = newPass.trim(); passChanged = true; }
                 saveDataToCloud(); renderHeader(); 
                 if (passChanged) { UI.toast('Nama & Sandi diperbarui!', 'success'); UI.val('my-new-password', ''); } else { UI.toast('Profil diperbarui!', 'success'); }
+                
+                const passInput = document.getElementById('my-new-password'); const eyeIcon = document.getElementById('eye-icon-profile');
+                if(passInput) passInput.type = 'password'; if(eyeIcon) { eyeIcon.classList.remove('fa-eye-slash'); eyeIcon.classList.add('fa-eye'); }
             }
         };
 
@@ -1105,7 +1211,16 @@
         };
 
         window.deleteTeacher = (id) => { if (id === 'admin') return; UI.confirm(`Hapus guru ${id}?`, () => { appState.teachers = appState.teachers.filter(t => t.id !== id); saveDataToCloud(); loadTeacherTable(); UI.toast('Dihapus'); }); };
-        window.showPasswordModal = (id) => { window.changePasswordId = id; document.getElementById('new-password-input').value = ''; document.getElementById('password-modal-user').innerText = `Reset sandi untuk: ${id}`; UI.show('password-modal'); document.getElementById('password-modal').classList.add('flex'); };
+        
+        window.showPasswordModal = (id) => { 
+            window.changePasswordId = id; 
+            document.getElementById('new-password-input').value = ''; 
+            const passInput = document.getElementById('new-password-input'); const eyeIcon = document.getElementById('eye-icon-reset');
+            if(passInput) passInput.type = 'password'; if(eyeIcon) { eyeIcon.classList.remove('fa-eye-slash'); eyeIcon.classList.add('fa-eye'); }
+            
+            document.getElementById('password-modal-user').innerText = `Reset sandi untuk: ${id}`; 
+            UI.show('password-modal'); document.getElementById('password-modal').classList.add('flex'); 
+        };
         window.closePasswordModal = () => { UI.hide('password-modal'); document.getElementById('password-modal').classList.remove('flex'); };
         window.savePassword = (e) => { e.preventDefault(); const newPass = document.getElementById('new-password-input').value.trim(); if(newPass === '') return; const t = appState.teachers.find(x => x.id === window.changePasswordId); if(t) { t.password = newPass; saveDataToCloud(); UI.toast(`Sandi diubah!`, 'success'); } closePasswordModal(); };
 
@@ -1225,7 +1340,9 @@
                             <div><label class="block text-xs font-bold text-gray-500 mb-1">Tahun Ajaran</label><input type="text" id="set-academic-year" class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50" value="${appState.settings.academicYear}"></div>
                             <div><label class="block text-xs font-bold text-gray-500 mb-1">Semester</label><select id="set-semester" class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50 font-bold"><option value="Ganjil" ${appState.settings.semester==='Ganjil'?'selected':''}>Ganjil</option><option value="Genap" ${appState.settings.semester==='Genap'?'selected':''}>Genap</option></select></div>
                             
-                            <div class="md:col-span-2 border-t pt-6 mt-4"><h3 class="font-bold text-gray-800 flex items-center text-lg mb-4"><i class="fas fa-file-signature text-purple-500 mr-2"></i> Penandatangan Rapot</h3></div>
+                            <div class="md:col-span-2 border-t pt-6 mt-4"><h3 class="font-bold text-gray-800 flex items-center text-lg mb-4"><i class="fas fa-file-signature text-purple-500 mr-2"></i> Pengaturan Cetak Rapor</h3></div>
+                            <div><label class="block text-xs font-bold text-gray-500 mb-1">Judul Laporan (Akhir Semester)</label><input type="text" id="set-report-title" class="w-full border border-gray-300 p-3 rounded-lg bg-white font-bold text-blue-900" value="${appState.settings.reportTitle || 'LAPORAN HASIL BELAJAR'}"></div>
+                            <div><label class="block text-xs font-bold text-gray-500 mb-1">Judul Laporan (Tengah Semester / PTS)</label><input type="text" id="set-mid-report-title" class="w-full border border-gray-300 p-3 rounded-lg bg-white font-bold text-purple-900" value="${appState.settings.midReportTitle || 'LAPORAN HASIL BELAJAR TENGAH SEMESTER'}"></div>
                             <div><label class="block text-xs font-bold text-gray-500 mb-1">Nama Kepala Sekolah</label><input type="text" id="set-headmaster-name" class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50" value="${appState.settings.headmasterName}"></div>
                             <div><label class="block text-xs font-bold text-gray-500 mb-1">NIP Kepala Sekolah</label><input type="text" id="set-headmaster-nip" class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50" value="${appState.settings.headmasterNip}"></div>
                             <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 mb-1">Tempat & Tanggal Terbit Rapot</label><input type="text" id="set-print-date" class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50" value="${appState.settings.printDate}"></div>
@@ -1251,18 +1368,14 @@
                 img.onload = () => {
                     const canvas = document.createElement('canvas'); 
                     
-                    // --- PERBAIKAN LOGIKA KOMPRESI AGAR TIDAK ERROR 1MB ---
-                    let MAX_SIZE = 1000;
+                    let MAX_SIZE = 300;
                     let mimeType = 'image/png';
-                    let quality = 0.92; // Hanya berlaku untuk JPEG
+                    let quality = 0.92; 
 
                     if (settingKey === 'loginBg' || settingKey === 'dashBg') {
-                        MAX_SIZE = 800; // Background cukup 800px untuk layar standar, agar ukurannya kecil
-                        mimeType = 'image/jpeg'; // Background WAJIB JPEG agar super kecil ukurannya
-                        quality = 0.6; // Kompresi 60%
-                    } else {
-                        MAX_SIZE = 300; // Logo dikecilkan jadi 300px (sudah sangat tajam untuk ukuran rapot)
-                        mimeType = 'image/png'; // Pertahankan PNG agar pinggirannya tetap transparan
+                        MAX_SIZE = 800; 
+                        mimeType = 'image/jpeg'; 
+                        quality = 0.6; 
                     }
 
                     let w = img.width, h = img.height;
@@ -1273,7 +1386,6 @@
                     canvas.width = w; canvas.height = h; 
                     const ctx = canvas.getContext('2d'); 
                     
-                    // Khusus JPEG, beri warna dasar putih (kalau gambar asli transparan, biar tidak jadi hitam)
                     if (mimeType === 'image/jpeg') {
                         ctx.fillStyle = "#ffffff";
                         ctx.fillRect(0, 0, w, h);
@@ -1281,7 +1393,6 @@
 
                     ctx.drawImage(img, 0, 0, w, h);
                     
-                    // Convert ke format base64 sesuai mimeType (JPEG atau PNG)
                     const dataUrl = canvas.toDataURL(mimeType, quality);
                     
                     if(settingKey === 'loginBg') {
@@ -1290,7 +1401,7 @@
                         document.getElementById('set-dash-bg').value = dataUrl;
                     } else {
                         appState.settings[settingKey] = dataUrl;
-                        renderPengaturan(); // Render ulang agar logo barunya langsung terlihat di pratinjau
+                        renderPengaturan(); 
                     }
                     
                     UI.toast("Foto berhasil dimuat. Klik tombol 'Simpan Semua' di bawah!", "success");
@@ -1300,7 +1411,7 @@
             reader.readAsDataURL(file);
         };
 
-        window.savePengaturan = () => { appState.settings.schoolName = UI.val('set-school-name'); appState.settings.schoolAddress = UI.val('set-school-address'); appState.settings.academicYear = UI.val('set-academic-year'); appState.settings.semester = UI.val('set-semester'); appState.settings.headmasterName = UI.val('set-headmaster-name'); appState.settings.headmasterNip = UI.val('set-headmaster-nip'); appState.settings.printDate = UI.val('set-print-date'); appState.settings.loginBg = UI.val('set-login-bg'); appState.settings.dashBg = UI.val('set-dash-bg'); saveDataToCloud(); UI.toast('Semua Pengaturan Tersimpan!', 'success'); document.getElementById('header-title-year').innerText = `Tahun Ajaran ${appState.settings.academicYear}`; };
+        window.savePengaturan = () => { appState.settings.schoolName = UI.val('set-school-name'); appState.settings.schoolAddress = UI.val('set-school-address'); appState.settings.academicYear = UI.val('set-academic-year'); appState.settings.semester = UI.val('set-semester'); appState.settings.headmasterName = UI.val('set-headmaster-name'); appState.settings.headmasterNip = UI.val('set-headmaster-nip'); appState.settings.printDate = UI.val('set-print-date'); appState.settings.loginBg = UI.val('set-login-bg'); appState.settings.dashBg = UI.val('set-dash-bg'); appState.settings.reportTitle = UI.val('set-report-title'); appState.settings.midReportTitle = UI.val('set-mid-report-title'); saveDataToCloud(); UI.toast('Semua Pengaturan Tersimpan!', 'success'); document.getElementById('header-title-year').innerText = `Tahun Ajaran ${appState.settings.academicYear}`; };
         window.resetDatabase = () => { UI.confirm('Yakin ingin <b>MENGHAPUS SEMUA DATA SISWA DAN NILAI</b>?<br><br><span class="text-sm text-red-500">Tindakan ini tidak bisa dibatalkan!</span>', () => { appState.students = []; appState.grades = {}; saveDataToCloud(); UI.toast('Database Dikosongkan!', 'success'); }); };
 
         function renderAmbangBatas() {
@@ -1416,21 +1527,53 @@
         function renderRapot() {
             let classOptions = appState.user.role === 'Wali Kelas' ? `<option value="${appState.user.assignedClass}">${appState.user.assignedClass}</option>` : '<option value="">-- Pilih Kelas --</option>' + SCHOOL_DATA.classes.map(c => `<option value="${c}">Kelas ${c}</option>`).join('');
             let content = `
-                <div class="flex justify-between mb-6 no-print"><h2 class="text-2xl font-bold font-russo tracking-wide">E-Rapot Akademik</h2><div class="flex gap-2"><button onclick="downloadWordRapot()" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold"><i class="fas fa-file-word"></i> Word</button><button onclick="printRapot()" class="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold"><i class="fas fa-print"></i> Cetak PDF (1)</button><button onclick="printAllRapot()" class="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold"><i class="fas fa-layer-group"></i> Semua PDF</button></div></div>
-                <div class="bg-white p-4 rounded-xl border mb-6 flex gap-4 no-print"><select id="rapot-class" onchange="loadRapotStds()" class="w-1/2 border p-2 font-bold">${classOptions}</select><select id="rapot-student" onchange="generateRapot()" class="w-1/2 border p-2 font-bold text-blue-900" disabled><option value="">Pilih Kelas</option></select></div>
-                <div id="rapot-export-container" class="overflow-x-auto w-full"><div id="rapot-preview" class="bg-white shadow-2xl border hidden text-black min-w-[800px]" style="font-family: 'Times New Roman', Times, serif; max-width: 800px; margin: 0 auto; line-height: 1.5; color: black !important;"></div></div>
+                <div class="flex flex-col md:flex-row justify-between mb-6 no-print gap-4">
+                    <h2 class="text-2xl font-bold font-russo tracking-wide">E-Rapot (PAS & PTS)</h2>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="downloadWordRapot()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold shadow transition"><i class="fas fa-file-word mr-1"></i> Unduh Word</button>
+                        <button onclick="printRapot()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold shadow transition"><i class="fas fa-print mr-1"></i> Cetak PDF (1)</button>
+                        <button onclick="printAllRapot()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold shadow transition"><i class="fas fa-layer-group mr-1"></i> Cetak Semua PDF</button>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-4 rounded-xl border mb-6 flex flex-col md:flex-row gap-4 no-print shadow-sm">
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Pilih Jenis Rapor</label>
+                        <select id="rapot-type" onchange="generateRapot()" class="w-full border p-2.5 font-bold bg-purple-50 text-purple-900 rounded-lg outline-none focus:ring-2 focus:ring-purple-500">
+                            <option value="semester">Rapor Akhir Semester (Format Lengkap)</option>
+                            <option value="mid">Rapor Tengah Semester / PTS (Tanpa Predikat)</option>
+                        </select>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Pilih Kelas</label>
+                        <select id="rapot-class" onchange="loadRapotStds()" class="w-full border p-2.5 font-bold rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50">
+                            ${classOptions}
+                        </select>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Pilih Siswa</label>
+                        <select id="rapot-student" onchange="generateRapot()" class="w-full border p-2.5 font-bold text-blue-900 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50" disabled>
+                            <option value="">Pilih Kelas Dahulu</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="rapot-export-container" class="overflow-x-auto w-full">
+                    <div id="rapot-preview" class="bg-white shadow-2xl border hidden text-black min-w-[800px]" style="font-family: 'Times New Roman', Times, serif; max-width: 800px; margin: 0 auto; line-height: 1.5; color: black !important;"></div>
+                </div>
             `;
             UI.html('view-rapot', content); if(appState.user && appState.user.role === 'Wali Kelas') loadRapotStds();
         }
 
         window.loadRapotStds = () => {
             const cls = UI.val('rapot-class'); const sel = document.getElementById('rapot-student');
-            if(!cls){ sel.innerHTML='<option value="">Pilih Kelas</option>'; sel.disabled=true; UI.hide('rapot-preview'); return; }
+            if(!cls){ sel.innerHTML='<option value="">Pilih Kelas Dahulu</option>'; sel.disabled=true; UI.hide('rapot-preview'); return; }
             let html = '<option value="">-- Pilih Siswa --</option>'; appState.students.filter(s => s.class === cls).forEach(s => html += `<option value="${s.id}">${s.name}</option>`); sel.innerHTML = html; sel.disabled = false;
         };
 
-        window.getSingleRapotHTML = (student, cls) => {
+        window.getSingleRapotHTML = (student, cls, type = 'semester') => {
             const sId = student.id; let gradesHtml = ''; let idx = 1;
+            const isMid = type === 'mid';
             const isFaseA = ['IA', 'IB', 'II'].includes(cls); const isFaseB = ['IIIA', 'IIIB', 'IIIC', 'IVA', 'IVB', 'IVC'].includes(cls);
             
             SCHOOL_DATA.subjects.forEach((sub) => {
@@ -1438,10 +1581,24 @@
                 if (sub === 'Pendidikan Agama Islam & Budi Pekerti' && student.religion !== 'Islam') return;
                 if (sub === 'IPAS' && isFaseA) return; if (sub === 'KKA (Koding dan Kecerdasan Artifisial)' && (isFaseA || isFaseB)) return;
 
-                let score = getNilaiAkhir(sId, sub); let pred = 'D'; 
-                if(score !== '-') { if(score>=90) pred='A'; else if(score>=80) pred='B'; else if(score>=70) pred='C'; } else { pred = '-'; }
-                let desc = pred!=='-' ? (appState.descriptions[`${sub}_${cls}_${pred}`] || appState.descriptions[`${sub}_${pred}`] || `Capaian baik pada ${sub}.`) : 'Belum ada penilaian.';
-                gradesHtml += `<tr><td style="border:1px solid black; padding:6px; text-align:center;">${idx++}</td><td style="border:1px solid black; padding:6px; font-weight:bold;">${sub}</td><td style="border:1px solid black; padding:6px; text-align:center;">${score}</td><td style="border:1px solid black; padding:6px; text-align:center; font-weight:bold;">${pred}</td><td style="border:1px solid black; padding:6px; font-size:12px; text-align:justify;">${desc}</td></tr>`;
+                let score = getNilaiAkhir(sId, sub); 
+                
+                if (isMid) {
+                    gradesHtml += `<tr><td style="border:1px solid black; padding:8px; text-align:center;">${idx++}</td><td style="border:1px solid black; padding:8px; font-weight:bold;">${sub}</td><td style="border:1px solid black; padding:8px; text-align:center; font-weight:bold; font-size:15px;">${score}</td></tr>`;
+                } else {
+                    const kktpA = appState.thresholds[`${sub}_${cls}_kktp_A`] !== undefined ? parseFloat(appState.thresholds[`${sub}_${cls}_kktp_A`]) : 90;
+                    const kktpB = appState.thresholds[`${sub}_${cls}_kktp_B`] !== undefined ? parseFloat(appState.thresholds[`${sub}_${cls}_kktp_B`]) : 80;
+                    const kktpC = appState.thresholds[`${sub}_${cls}_kktp_C`] !== undefined ? parseFloat(appState.thresholds[`${sub}_${cls}_kktp_C`]) : 70;
+
+                    let pred = 'D'; 
+                    if(score !== '-') { if(score>=kktpA) pred='A'; else if(score>=kktpB) pred='B'; else if(score>=kktpC) pred='C'; } else { pred = '-'; }
+                    let desc = pred!=='-' ? (appState.descriptions[`${sub}_${cls}_${pred}`] || appState.descriptions[`${sub}_${pred}`] || `{nama} menunjukkan capaian yang ${pred === 'A' ? 'Sangat Baik' : pred === 'B' ? 'Baik' : pred === 'C' ? 'Cukup' : 'Perlu Bimbingan'} pada pelajaran {mapel}.`) : 'Belum ada penilaian.';
+                    
+                    desc = desc.replace(/{mapel}/g, sub);
+                    desc = desc.replace(/{nama}/g, student.name);
+
+                    gradesHtml += `<tr><td style="border:1px solid black; padding:6px; text-align:center;">${idx++}</td><td style="border:1px solid black; padding:6px; font-weight:bold;">${sub}</td><td style="border:1px solid black; padding:6px; text-align:center;">${score}</td><td style="border:1px solid black; padding:6px; text-align:center; font-weight:bold;">${pred}</td><td style="border:1px solid black; padding:6px; font-size:12px; text-align:justify;">${desc}</td></tr>`;
+                }
             });
             
             const val = (f) => {
@@ -1453,27 +1610,38 @@
             };
             const waliData = appState.teachers.find(t => t.role === 'Wali Kelas' && t.assignedClass === cls);
             
+            let tableHeader = isMid 
+                ? `<tr><td style="border:1px solid black; padding:8px; text-align:center; width: 5%;">No</td><td style="border:1px solid black; padding:8px; width: 75%;">Mata Pelajaran</td><td style="border:1px solid black; padding:8px; text-align:center; width: 20%;">Nilai Akhir</td></tr>`
+                : `<tr><td style="border:1px solid black; padding:8px; text-align:center;">No</td><td style="border:1px solid black; padding:8px;">Mata Pelajaran</td><td style="border:1px solid black; padding:8px; text-align:center;">Nilai Akhir</td><td style="border:1px solid black; padding:8px; text-align:center;">Predikat</td><td style="border:1px solid black; padding:8px;">Deskripsi</td></tr>`;
+                
+            let reportTitleText = isMid 
+                ? (appState.settings.midReportTitle || 'LAPORAN HASIL BELAJAR TENGAH SEMESTER') 
+                : (appState.settings.reportTitle || 'LAPORAN HASIL BELAJAR');
+
+            let safeSchoolName = (appState.settings.schoolName || '').replace(/ /g, '&nbsp;');
+            let safeReportTitle = reportTitleText.replace(/ /g, '&nbsp;');
+
             return `
                 <div style="padding: 30px; background: white; color: black; font-family: 'Times New Roman', Times, serif; width: 100%; box-sizing: border-box;">
                     
                     <table style="width: 100%; border-bottom: 3px double black; margin-bottom: 20px; padding-bottom: 10px; border-collapse: collapse;">
                         <tr>
                             <td style="width: 15%; text-align: center; vertical-align: middle;">
-                                <img src="${appState.settings.kopLeftLogo}" style="width: 80px; height: 80px; min-width: 80px; min-height: 80px; max-width: 80px; max-height: 80px; object-fit: contain;">
+                                <img src="${appState.settings.kopLeftLogo}" width="80" height="80" style="width: 80px; height: 80px; min-width: 80px; min-height: 80px; max-width: 80px; max-height: 80px; object-fit: contain;">
                             </td>
                             <td style="width: 70%; text-align: center; vertical-align: middle; line-height: 1.2;">
-                                <h3 style="margin:0; font-size:16px; font-weight:bold; font-family: 'Times New Roman', Times, serif;">PEMERINTAH KOTA MANADO</h3>
-                                <h3 style="margin:0; font-size:16px; font-weight:bold; font-family: 'Times New Roman', Times, serif;">DINAS PENDIDIKAN DAN KEBUDAYAAN</h3>
-                                <h2 style="margin:5px 0; font-size:22px; font-weight:900; font-family: 'Times New Roman', Times, serif;">${appState.settings.schoolName}</h2>
+                                <h3 style="margin:0; font-size:16px; font-weight:bold; font-family: 'Times New Roman', Times, serif;">PEMERINTAH&nbsp;KOTA&nbsp;MANADO</h3>
+                                <h3 style="margin:0; font-size:16px; font-weight:bold; font-family: 'Times New Roman', Times, serif;">DINAS&nbsp;PENDIDIKAN&nbsp;DAN&nbsp;KEBUDAYAAN</h3>
+                                <h2 style="margin:5px 0; font-size:22px; font-weight:900; font-family: 'Times New Roman', Times, serif;">${safeSchoolName}</h2>
                                 <p style="margin:0; font-size:12px; font-style:italic; font-family: 'Times New Roman', Times, serif;">${appState.settings.schoolAddress}</p>
                             </td>
                             <td style="width: 15%; text-align: center; vertical-align: middle;">
-                                <img src="${appState.settings.kopRightLogo}" style="width: 80px; height: 80px; min-width: 80px; min-height: 80px; max-width: 80px; max-height: 80px; object-fit: contain;">
+                                <img src="${appState.settings.kopRightLogo}" width="80" height="80" style="width: 80px; height: 80px; min-width: 80px; min-height: 80px; max-width: 80px; max-height: 80px; object-fit: contain;">
                             </td>
                         </tr>
                     </table>
 
-                    <h3 style="text-align:center; margin-bottom:20px; font-weight:bold; text-decoration:underline;">LAPORAN HASIL BELAJAR</h3>
+                    <h3 style="text-align:center; margin-bottom:20px; font-weight:bold; text-decoration:underline; font-family: 'Times New Roman', Times, serif; text-transform: uppercase;">${safeReportTitle}</h3>
                     
                     <table style="width:100%; font-size:14px; margin-bottom:20px; border-collapse: collapse;">
                         <tr>
@@ -1489,7 +1657,7 @@
                     <h4 style="margin-bottom:8px; font-weight:bold;">A. Pencapaian Akademik</h4>
                     <table style="width:100%; border-collapse:collapse; margin-bottom:25px; font-size:13px;">
                         <thead style="background-color:#e5e7eb; font-weight:bold;">
-                            <tr><td style="border:1px solid black; padding:8px; text-align:center;">No</td><td style="border:1px solid black; padding:8px;">Mata Pelajaran</td><td style="border:1px solid black; padding:8px; text-align:center;">Nilai Akhir</td><td style="border:1px solid black; padding:8px; text-align:center;">Predikat</td><td style="border:1px solid black; padding:8px;">Deskripsi</td></tr>
+                            ${tableHeader}
                         </thead>
                         <tbody>${gradesHtml}</tbody>
                     </table>
@@ -1528,20 +1696,28 @@
                             <td style="width:33%; vertical-align: top;">${appState.settings.printDate}<br>Wali Kelas<br><br><br><br><b><u>${waliData?waliData.name:'-'}</u></b><br>NIP. ${waliData?waliData.nip:'-'}</td>
                         </tr>
                         <tr>
-                            <td colspan="3" style="padding-top:40px; vertical-align: top;">Kepala Sekolah<br><br><br><br><b><u>${appState.settings.headmasterName}</u></b><br>NIP. ${appState.settings.headmasterNip}</td>
+                            <td colspan="3" style="padding-top:40px; vertical-align: top;">Kepala Satuan Pendidikan<br><br><br><br><b><u>${appState.settings.headmasterName}</u></b><br>NIP. ${appState.settings.headmasterNip}</td>
                         </tr>
                     </table>
                 </div>
             `;
         };
-        window.generateRapot = () => { const sId = UI.val('rapot-student'); const cls = UI.val('rapot-class'); if(!sId) { UI.hide('rapot-preview'); return; } UI.html('rapot-preview', getSingleRapotHTML(appState.students.find(s => s.id === sId), cls)); UI.show('rapot-preview'); };
+        window.generateRapot = () => { 
+            const sId = UI.val('rapot-student'); 
+            const cls = UI.val('rapot-class'); 
+            const type = UI.val('rapot-type');
+            if(!sId) { UI.hide('rapot-preview'); return; } 
+            UI.html('rapot-preview', getSingleRapotHTML(appState.students.find(s => s.id === sId), cls, type)); 
+            UI.show('rapot-preview'); 
+        };
         
         window.downloadWordRapot = () => { 
             const sId = UI.val('rapot-student'); 
+            const type = UI.val('rapot-type');
             if(!sId) return; 
             
             const student = appState.students.find(s => s.id === sId);
-            let htmlContent = getSingleRapotHTML(student, UI.val('rapot-class'));
+            let htmlContent = getSingleRapotHTML(student, UI.val('rapot-class'), type);
             
             let baseUrl = window.location.href.split('?')[0].split('#')[0];
             baseUrl = baseUrl.substring(0, baseUrl.lastIndexOf("/") + 1);
@@ -1571,14 +1747,157 @@
             const blob = new Blob(['\ufeff', fullHtml], {type: 'application/msword'}); 
             const link = document.createElement('a'); 
             link.href = URL.createObjectURL(blob); 
-            link.download = `Rapot_${student.name.replace(/\s+/g, '_')}_Kelas_${UI.val('rapot-class')}.doc`; 
+            link.download = `Rapot_${type === 'mid' ? 'PTS_' : ''}${student.name.replace(/\s+/g, '_')}_Kelas_${UI.val('rapot-class')}.doc`; 
             document.body.appendChild(link); 
             link.click(); 
             document.body.removeChild(link); 
         };
         
-        window.printRapot = () => { html2pdf().set({margin:0, filename:'Rapot.pdf', html2canvas:{scale:2}, jsPDF:{unit:'mm', format:'legal'}}).from(document.getElementById('rapot-preview')).save(); };
-        window.printAllRapot = () => { const cls = UI.val('rapot-class'); const stds = appState.students.filter(s => s.class === cls); if(!stds.length) return; let html = '<div style="background:white; color:black;">'; stds.forEach((s, i) => { html += getSingleRapotHTML(s, cls); if (i < stds.length - 1) html += '<div class="html2pdf__page-break"></div>'; }); html += '</div>'; const d = document.createElement('div'); d.innerHTML = html; html2pdf().set({margin:0, filename:`Semua_Rapot_Kelas_${cls}.pdf`, html2canvas:{scale:2}, jsPDF:{unit:'mm', format:'legal'}}).from(d).save(); };
+        window.printRapot = () => { 
+            const type = UI.val('rapot-type');
+            html2pdf().set({margin:0, filename:`Rapot_${type === 'mid' ? 'PTS' : 'Akhir'}.pdf`, html2canvas:{scale:2}, jsPDF:{unit:'mm', format:'legal'}}).from(document.getElementById('rapot-preview')).save(); 
+        };
+        
+        window.printAllRapot = () => { 
+            const cls = UI.val('rapot-class'); 
+            const type = UI.val('rapot-type');
+            const stds = appState.students.filter(s => s.class === cls); 
+            if(!stds.length) return; 
+            let html = '<div style="background:white; color:black;">'; 
+            stds.forEach((s, i) => { 
+                html += getSingleRapotHTML(s, cls, type); 
+                if (i < stds.length - 1) html += '<div class="html2pdf__page-break"></div>'; 
+            }); 
+            html += '</div>'; 
+            const d = document.createElement('div'); d.innerHTML = html; 
+            html2pdf().set({margin:0, filename:`Semua_Rapot_${type === 'mid' ? 'PTS_' : ''}Kelas_${cls}.pdf`, html2canvas:{scale:2}, jsPDF:{unit:'mm', format:'legal'}}).from(d).save(); 
+        };
+
+        window.downloadExcelKeaktifan = () => {
+            if(typeof XLSX === 'undefined') { UI.toast("Alat Excel sedang dimuat.", "error"); return; }
+            const sub = UI.val('filter-subject-aktif'); const cls = UI.val('filter-class-aktif');
+            if(!cls || !sub) { UI.toast("Pilih kelas dan mapel terlebih dahulu!", "error"); return; }
+            let table = document.getElementById("keaktifan-table-export"); let clone = table.cloneNode(true);
+            let inputs = clone.querySelectorAll("input"); inputs.forEach(input => { let textNode = document.createTextNode(input.value || ''); input.parentNode.replaceChild(textNode, input); });
+            let wb = XLSX.utils.table_to_book(clone, {sheet:"Keaktifan"}); XLSX.writeFile(wb, `Data_Keaktifan_${sub.replace(/\//g,'_')}_Kelas_${cls}.xlsx`);
+            UI.toast("File Excel berhasil diunduh!", "success");
+        };
+
+        window.printPDFKeaktifan = () => {
+            const sub = UI.val('filter-subject-aktif'); const cls = UI.val('filter-class-aktif');
+            if(!cls || !sub) { UI.toast("Pilih kelas dan mapel terlebih dahulu!", "error"); return; }
+            UI.toast("Merakit PDF...", "success");
+            
+            let stds = appState.students.filter(s => s.class === cls);
+            if (sub === 'Pendidikan Agama Kristen & Budi Pekerti') stds = stds.filter(s => s.religion === 'Kristen');
+            if (sub === 'Pendidikan Agama Islam & Budi Pekerti') stds = stds.filter(s => s.religion === 'Islam');
+
+            let tbodyHtml = '';
+            stds.forEach((s, i) => {
+                const val = (f) => appState.grades[`${s.id}_${sub}_aktif_${f}`] || '-';
+                let avg = getKeaktifanAvg(s.id, sub) !== null ? getKeaktifanAvg(s.id, sub) : '-';
+                tbodyHtml += `
+                    <tr>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${i+1}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${s.nis}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold; text-align: left;">${s.name}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('bertanya')}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('menjawab')}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('memperhatikan')}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('kerjasama')}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('mencatat')}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; font-weight: bold; color: #c2410c;">${avg}</td>
+                    </tr>
+                `;
+            });
+            const htmlString = `
+                <div style="font-family: Arial, sans-serif; width: 100%; padding: 10px;">
+                    <h3 style="text-align: center; margin-bottom: 5px;">REKAP NILAI KEAKTIFAN - KELAS ${cls}</h3>
+                    <p style="text-align: center; font-weight:bold; margin-bottom: 20px;">Mata Pelajaran: ${sub}</p>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center;">
+                        <thead>
+                            <tr style="background-color: #f1f5f9;">
+                                <th style="border: 1px solid #cbd5e1; padding: 8px; width: 30px;">No</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">NISN</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: left;">Nama Siswa</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Bertanya</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Menjawab</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Memperhatikan</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Kerjasama</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Mencatat</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Nilai Keaktifan</th>
+                            </tr>
+                        </thead>
+                        <tbody>${tbodyHtml}</tbody>
+                    </table>
+                </div>
+            `;
+            const opt = { margin: 10, filename: `Data_Keaktifan_${sub.replace(/\//g,'_')}_Kelas_${cls}.pdf`, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } };
+            html2pdf().set(opt).from(htmlString).save();
+        };
+
+        window.downloadExcelSikap = () => {
+            if(typeof XLSX === 'undefined') { UI.toast("Alat Excel sedang dimuat.", "error"); return; }
+            const sub = UI.val('filter-subject-sikap'); const cls = UI.val('filter-class-sikap');
+            if(!cls || !sub) { UI.toast("Pilih kelas dan mapel terlebih dahulu!", "error"); return; }
+            let table = document.getElementById("sikap-table-export"); let clone = table.cloneNode(true);
+            let inputs = clone.querySelectorAll("input"); inputs.forEach(input => { let textNode = document.createTextNode(input.value || ''); input.parentNode.replaceChild(textNode, input); });
+            let wb = XLSX.utils.table_to_book(clone, {sheet:"Sikap"}); XLSX.writeFile(wb, `Data_Sikap_${sub.replace(/\//g,'_')}_Kelas_${cls}.xlsx`);
+            UI.toast("File Excel berhasil diunduh!", "success");
+        };
+
+        window.printPDFSikap = () => {
+            const sub = UI.val('filter-subject-sikap'); const cls = UI.val('filter-class-sikap');
+            if(!cls || !sub) { UI.toast("Pilih kelas dan mapel terlebih dahulu!", "error"); return; }
+            UI.toast("Merakit PDF...", "success");
+            
+            let stds = appState.students.filter(s => s.class === cls);
+            if (sub === 'Pendidikan Agama Kristen & Budi Pekerti') stds = stds.filter(s => s.religion === 'Kristen');
+            if (sub === 'Pendidikan Agama Islam & Budi Pekerti') stds = stds.filter(s => s.religion === 'Islam');
+
+            let tbodyHtml = '';
+            stds.forEach((s, i) => {
+                const val = (f) => appState.grades[`${s.id}_${sub}_sikap_${f}`] || '-';
+                let avg = getSikapAvg(s.id, sub) !== null ? getSikapAvg(s.id, sub) : '-';
+                tbodyHtml += `
+                    <tr>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${i+1}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${s.nis}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold; text-align: left;">${s.name}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('disiplin')}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('tanggungjawab')}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('jujur')}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('peduli')}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('kesopanan')}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; font-weight: bold; color: #be185d;">${avg}</td>
+                    </tr>
+                `;
+            });
+            const htmlString = `
+                <div style="font-family: Arial, sans-serif; width: 100%; padding: 10px;">
+                    <h3 style="text-align: center; margin-bottom: 5px;">REKAP PENILAIAN SIKAP - KELAS ${cls}</h3>
+                    <p style="text-align: center; font-weight:bold; margin-bottom: 20px;">Mata Pelajaran: ${sub}</p>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center;">
+                        <thead>
+                            <tr style="background-color: #f1f5f9;">
+                                <th style="border: 1px solid #cbd5e1; padding: 8px; width: 30px;">No</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">NISN</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: left;">Nama Siswa</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Disiplin</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Tanggungjawab</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Jujur</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Peduli</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Kesopanan</th>
+                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Nilai Sikap</th>
+                            </tr>
+                        </thead>
+                        <tbody>${tbodyHtml}</tbody>
+                    </table>
+                </div>
+            `;
+            const opt = { margin: 10, filename: `Data_Sikap_${sub.replace(/\//g,'_')}_Kelas_${cls}.pdf`, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } };
+            html2pdf().set(opt).from(htmlString).save();
+        };
     </script>
     
     <div id="global-loader" class="fixed inset-0 bg-slate-900/80 z-[100] flex flex-col items-center justify-center backdrop-blur-md">
@@ -1587,7 +1906,24 @@
 
     <!-- Modals (Confirm, Password, Add Student, Teacher) -->
     <div id="custom-confirm-modal" class="fixed inset-0 bg-black/70 z-[100] hidden flex-col items-center justify-center backdrop-blur-sm p-4"><div class="bg-white rounded-2xl w-full max-w-sm text-center p-6"><p id="custom-confirm-msg" class="mb-6"></p><div class="flex gap-3"><button onclick="UI.closeConfirm()" class="flex-1 bg-gray-200 py-3 rounded-xl font-bold">Batal</button><button id="custom-confirm-btn" class="flex-1 bg-red-600 text-white py-3 rounded-xl font-bold">Ya</button></div></div></div>
-    <div id="password-modal" class="fixed inset-0 bg-black/70 z-[110] hidden flex-col items-center justify-center"><div class="bg-white rounded-2xl w-full max-w-md"><form onsubmit="savePassword(event)" class="p-6"><p id="password-modal-user" class="mb-4"></p><input type="text" id="new-password-input" required class="w-full border p-3 font-mono" placeholder="Sandi baru"><div class="flex gap-3 mt-4"><button type="button" onclick="closePasswordModal()" class="flex-1 bg-gray-200 p-3 rounded-lg">Batal</button><button type="submit" class="flex-1 bg-yellow-600 text-white p-3 rounded-lg">Simpan</button></div></form></div></div>
+    
+    <div id="password-modal" class="fixed inset-0 bg-black/70 z-[110] hidden flex-col items-center justify-center">
+        <div class="bg-white rounded-2xl w-full max-w-md">
+            <form onsubmit="savePassword(event)" class="p-6">
+                <p id="password-modal-user" class="mb-4 font-bold text-gray-800"></p>
+                <div class="relative">
+                    <input type="password" id="new-password-input" required class="w-full border p-3 font-mono rounded-lg pr-10" placeholder="Sandi baru">
+                    <button type="button" onclick="togglePasswordVisibility('new-password-input', 'eye-icon-reset')" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-blue-500">
+                        <i id="eye-icon-reset" class="fas fa-eye"></i>
+                    </button>
+                </div>
+                <div class="flex gap-3 mt-4">
+                    <button type="button" onclick="closePasswordModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 transition p-3 rounded-lg font-bold">Batal</button>
+                    <button type="submit" class="flex-1 bg-yellow-600 hover:bg-yellow-700 transition text-white p-3 rounded-lg font-bold">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
     
     <div id="add-student-modal" class="fixed inset-0 bg-black/70 z-[60] hidden flex-col items-center justify-center"><div class="bg-white rounded-2xl w-full max-w-md"><div class="bg-slate-900 text-white p-4 flex justify-between"><h3 id="add-student-modal-title" class="font-bold">Tambah</h3><button onclick="closeAddStudentModal()"><i class="fas fa-times"></i></button></div><form id="form-add-student" onsubmit="saveNewStudent(event)" class="p-6 space-y-4"><input type="text" id="new-student-name" required class="w-full border p-3" placeholder="Nama"><input type="text" id="new-student-nis" required class="w-full border p-3" placeholder="NISN"><div class="flex gap-4"><select id="new-student-class" class="flex-1 border p-3"></select><select id="new-student-religion" class="flex-1 border p-3"><option>Kristen</option><option>Islam</option><option>Katolik</option><option>Hindu</option><option>Buddha</option></select></div><div class="flex gap-3"><button type="button" onclick="closeAddStudentModal()" class="flex-1 bg-gray-200 p-3">Batal</button><button type="submit" class="flex-1 bg-blue-600 text-white p-3">Simpan</button></div></form></div></div>
     
@@ -1605,7 +1941,12 @@
             </div>
             <form id="login-form" class="space-y-4" onsubmit="event.preventDefault(); doLogin();">
                 <input type="text" id="login-username" placeholder="Username" class="input-glow w-full p-4 border border-slate-600 rounded-xl bg-slate-900/80 text-white font-medium outline-none" required>
-                <input type="password" id="login-password" placeholder="Kata Sandi" class="input-glow w-full p-4 border border-slate-600 rounded-xl bg-slate-900/80 text-white font-medium outline-none" required>
+                <div class="relative">
+                    <input type="password" id="login-password" placeholder="Kata Sandi" class="input-glow w-full p-4 border border-slate-600 rounded-xl bg-slate-900/80 text-white font-medium outline-none pr-12" required>
+                    <button type="button" onclick="togglePasswordVisibility('login-password', 'eye-icon-login')" class="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-white transition">
+                        <i id="eye-icon-login" class="fas fa-eye"></i>
+                    </button>
+                </div>
                 <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold p-4 rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all font-poppins">MASUK</button>
             </form>
         </div>
