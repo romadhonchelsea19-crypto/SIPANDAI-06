@@ -78,13 +78,46 @@
         
         @media print {
             body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            body * { visibility: hidden !important; }
-            body.printing-rapot #rapot-preview, body.printing-rapot #rapot-preview * { visibility: visible !important; }
-            body.printing-rapot #rapot-preview { 
-                position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; 
-                border: none !important; box-shadow: none !important; padding: 10px !important; margin: 0 !important; background: white !important;
-            }
             aside, header, button, .no-print { display: none !important; }
+            
+            /* KUNCI PERBAIKAN: Lepas kuncian tinggi layar dan paksa jadi dokumen normal (static) */
+            body.printing-rapot, 
+            body.printing-rapot #app-screen, 
+            body.printing-rapot #main-content, 
+            body.printing-rapot main,
+            body.printing-rapot #view-rapot,
+            body.printing-rapot #rapot-export-container {
+                height: auto !important; 
+                overflow: visible !important; 
+                display: block !important; 
+                position: static !important;
+                width: 100% !important;
+            }
+
+            /* Sembunyikan elemen menu/layar lain */
+            body.printing-rapot .view-section:not(#view-rapot) { display: none !important; }
+
+            /* Wadah rapot TIDAK BOLEH absolute, harus static agar bisa dipotong browser */
+            body.printing-rapot #rapot-preview { 
+                display: block !important; 
+                visibility: visible !important; 
+                position: static !important; 
+                width: 100% !important; 
+                border: none !important; 
+                box-shadow: none !important; 
+                padding: 0 !important; 
+                margin: 0 !important; 
+                background: white !important;
+            }
+            body.printing-rapot #rapot-preview * { visibility: visible !important; }
+
+            /* PERINTAH PEMOTONG KERTAS MUTLAK (PAGE BREAK) */
+            .cetak-satu-siswa {
+                page-break-after: always !important;
+                break-after: page !important;
+                display: block !important;
+                position: relative !important;
+            }
         }
     </style>
 </head>
@@ -254,7 +287,7 @@
             showLoading: () => UI.show('global-loader'), hideLoading: () => UI.hide('global-loader'),
             toast: (msg, type = 'success') => {
                 const toast = document.createElement('div');
-                toast.className = `fixed bottom-4 right-4 text-white px-6 py-3 rounded-lg shadow-lg transition-opacity duration-300 z-50 font-poppins ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+                toast.className = `fixed bottom-4 right-4 text-white px-6 py-3 rounded-lg shadow-lg transition-opacity duration-300 z-50 font-poppins no-print ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
                 toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-2"></i> ${msg}`;
                 document.body.appendChild(toast); setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
             },
@@ -1531,8 +1564,8 @@
                     <h2 class="text-2xl font-bold font-russo tracking-wide">E-Rapot (PAS & PTS)</h2>
                     <div class="flex flex-wrap gap-2">
                         <button onclick="downloadWordRapot()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold shadow transition"><i class="fas fa-file-word mr-1"></i> Unduh Word</button>
-                        <button onclick="printRapot()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold shadow transition"><i class="fas fa-print mr-1"></i> Cetak PDF (1)</button>
-                        <button onclick="printAllRapot()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold shadow transition"><i class="fas fa-layer-group mr-1"></i> Cetak Semua PDF</button>
+                        <button onclick="printRapot()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold shadow transition"><i class="fas fa-print mr-1"></i> Print (1 Siswa)</button>
+                        <button onclick="printAllRapot()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold shadow transition"><i class="fas fa-layer-group mr-1"></i> Print Semua (1 Kelas)</button>
                     </div>
                 </div>
                 
@@ -1584,7 +1617,7 @@
                 let score = getNilaiAkhir(sId, sub); 
                 
                 if (isMid) {
-                    gradesHtml += `<tr><td style="border:1px solid black; padding:8px; text-align:center;">${idx++}</td><td style="border:1px solid black; padding:8px; font-weight:bold;">${sub}</td><td style="border:1px solid black; padding:8px; text-align:center; font-weight:bold; font-size:15px;">${score}</td></tr>`;
+                    gradesHtml += `<tr><td width="5%" style="border:1px solid black; padding:7px; text-align:center;">${idx++}</td><td width="75%" style="border:1px solid black; padding:7px; font-weight:bold;">${sub}</td><td width="20%" style="border:1px solid black; padding:7px; text-align:center; font-weight:bold; font-size:14px;">${score}</td></tr>`;
                 } else {
                     const kktpA = appState.thresholds[`${sub}_${cls}_kktp_A`] !== undefined ? parseFloat(appState.thresholds[`${sub}_${cls}_kktp_A`]) : 90;
                     const kktpB = appState.thresholds[`${sub}_${cls}_kktp_B`] !== undefined ? parseFloat(appState.thresholds[`${sub}_${cls}_kktp_B`]) : 80;
@@ -1597,7 +1630,7 @@
                     desc = desc.replace(/{mapel}/g, sub);
                     desc = desc.replace(/{nama}/g, student.name);
 
-                    gradesHtml += `<tr><td style="border:1px solid black; padding:6px; text-align:center;">${idx++}</td><td style="border:1px solid black; padding:6px; font-weight:bold;">${sub}</td><td style="border:1px solid black; padding:6px; text-align:center;">${score}</td><td style="border:1px solid black; padding:6px; text-align:center; font-weight:bold;">${pred}</td><td style="border:1px solid black; padding:6px; font-size:12px; text-align:justify;">${desc}</td></tr>`;
+                    gradesHtml += `<tr><td width="5%" style="border:1px solid black; padding:5px; text-align:center;">${idx++}</td><td width="30%" style="border:1px solid black; padding:5px; font-weight:bold;">${sub}</td><td width="10%" style="border:1px solid black; padding:5px; text-align:center;">${score}</td><td width="10%" style="border:1px solid black; padding:5px; text-align:center; font-weight:bold;">${pred}</td><td width="45%" style="border:1px solid black; padding:5px; font-size:11px; text-align:justify;">${desc}</td></tr>`;
                 }
             });
             
@@ -1611,92 +1644,105 @@
             const waliData = appState.teachers.find(t => t.role === 'Wali Kelas' && t.assignedClass === cls);
             
             let tableHeader = isMid 
-                ? `<tr><td style="border:1px solid black; padding:8px; text-align:center; width: 5%;">No</td><td style="border:1px solid black; padding:8px; width: 75%;">Mata Pelajaran</td><td style="border:1px solid black; padding:8px; text-align:center; width: 20%;">Nilai Akhir</td></tr>`
-                : `<tr><td style="border:1px solid black; padding:8px; text-align:center;">No</td><td style="border:1px solid black; padding:8px;">Mata Pelajaran</td><td style="border:1px solid black; padding:8px; text-align:center;">Nilai Akhir</td><td style="border:1px solid black; padding:8px; text-align:center;">Predikat</td><td style="border:1px solid black; padding:8px;">Deskripsi</td></tr>`;
+                ? `<tr><td width="5%" style="border:1px solid black; padding:7px; text-align:center;">No</td><td width="75%" style="border:1px solid black; padding:7px;">Mata Pelajaran</td><td width="20%" style="border:1px solid black; padding:7px; text-align:center;">Nilai Akhir</td></tr>`
+                : `<tr><td width="5%" style="border:1px solid black; padding:7px; text-align:center;">No</td><td width="30%" style="border:1px solid black; padding:7px;">Mata Pelajaran</td><td width="10%" style="border:1px solid black; padding:7px; text-align:center;">Nilai Akhir</td><td width="10%" style="border:1px solid black; padding:7px; text-align:center;">Predikat</td><td width="45%" style="border:1px solid black; padding:7px;">Deskripsi</td></tr>`;
                 
-            let reportTitleText = isMid 
-                ? (appState.settings.midReportTitle || 'LAPORAN HASIL BELAJAR TENGAH SEMESTER') 
-                : (appState.settings.reportTitle || 'LAPORAN HASIL BELAJAR');
+            let titleHtml = '';
+            let line1 = (appState.settings.reportTitle || 'LAPORAN HASIL BELAJAR').replace(/ /g, '&nbsp;');
+            if (isMid) {
+                let line2 = (appState.settings.midReportTitle || 'SUMATIF LINGKUP MATERI SEMESTER GANJIL').replace(/ /g, '&nbsp;');
+                titleHtml = `
+                    <div style="text-align:center; margin-bottom:15px; font-family: 'Times New Roman', Times, serif; font-weight: bold; font-size: 15px;">
+                        <u>${line1}</u><br>
+                        <u>${line2}</u>
+                    </div>
+                `;
+            } else {
+                titleHtml = `
+                    <div style="text-align:center; margin-bottom:15px; font-family: 'Times New Roman', Times, serif; font-weight: bold; font-size: 15px;">
+                        <u>${line1}</u>
+                    </div>
+                `;
+            }
 
             let safeSchoolName = (appState.settings.schoolName || '').replace(/ /g, '&nbsp;');
-            let safeReportTitle = reportTitleText.replace(/ /g, '&nbsp;');
 
             return `
-                <div style="padding: 30px; background: white; color: black; font-family: 'Times New Roman', Times, serif; width: 100%; box-sizing: border-box;">
+                <div style="padding: 20px; background: white; color: black; font-family: 'Times New Roman', Times, serif; width: 100%; box-sizing: border-box;">
                     
-                    <table style="width: 100%; border-bottom: 3px double black; margin-bottom: 20px; padding-bottom: 10px; border-collapse: collapse;">
+                    <table style="width: 100%; border-bottom: 3px double black; margin-bottom: 10px; padding-bottom: 5px; border-collapse: collapse;">
                         <tr>
-                            <td style="width: 15%; text-align: center; vertical-align: middle;">
+                            <td width="15%" style="text-align: center; vertical-align: middle;">
                                 <img src="${appState.settings.kopLeftLogo}" width="80" height="80" style="width: 80px; height: 80px; min-width: 80px; min-height: 80px; max-width: 80px; max-height: 80px; object-fit: contain;">
                             </td>
-                            <td style="width: 70%; text-align: center; vertical-align: middle; line-height: 1.2;">
+                            <td width="70%" style="text-align: center; vertical-align: middle; line-height: 1.2;">
                                 <h3 style="margin:0; font-size:16px; font-weight:bold; font-family: 'Times New Roman', Times, serif;">PEMERINTAH&nbsp;KOTA&nbsp;MANADO</h3>
                                 <h3 style="margin:0; font-size:16px; font-weight:bold; font-family: 'Times New Roman', Times, serif;">DINAS&nbsp;PENDIDIKAN&nbsp;DAN&nbsp;KEBUDAYAAN</h3>
-                                <h2 style="margin:5px 0; font-size:22px; font-weight:900; font-family: 'Times New Roman', Times, serif;">${safeSchoolName}</h2>
-                                <p style="margin:0; font-size:12px; font-style:italic; font-family: 'Times New Roman', Times, serif;">${appState.settings.schoolAddress}</p>
+                                <h2 style="margin:5px 0; font-size:20px; font-weight:900; font-family: 'Times New Roman', Times, serif;">${safeSchoolName}</h2>
+                                <p style="margin:0; font-size:11px; font-style:italic; font-family: 'Times New Roman', Times, serif;">${appState.settings.schoolAddress}</p>
                             </td>
-                            <td style="width: 15%; text-align: center; vertical-align: middle;">
+                            <td width="15%" style="text-align: center; vertical-align: middle;">
                                 <img src="${appState.settings.kopRightLogo}" width="80" height="80" style="width: 80px; height: 80px; min-width: 80px; min-height: 80px; max-width: 80px; max-height: 80px; object-fit: contain;">
                             </td>
                         </tr>
                     </table>
 
-                    <h3 style="text-align:center; margin-bottom:20px; font-weight:bold; text-decoration:underline; font-family: 'Times New Roman', Times, serif; text-transform: uppercase;">${safeReportTitle}</h3>
+                    ${titleHtml}
                     
-                    <table style="width:100%; font-size:14px; margin-bottom:20px; border-collapse: collapse;">
+                    <table style="width:100%; font-size:13px; margin-bottom:12px; border-collapse: collapse;">
                         <tr>
-                            <td style="width:120px; padding: 2px;">Nama</td><td style="padding: 2px;">: <b>${student.name}</b></td>
-                            <td style="width:100px; padding: 2px;">Kelas</td><td style="padding: 2px;">: <b>${cls}</b></td>
+                            <td width="15%" style="padding: 2px;">Nama</td><td width="55%" style="padding: 2px;">: <b>${student.name}</b></td>
+                            <td width="15%" style="padding: 2px;">Kelas</td><td width="15%" style="padding: 2px;">: <b>${cls}</b></td>
                         </tr>
                         <tr>
-                            <td style="padding: 2px;">NISN</td><td style="padding: 2px;">: ${student.nis}</td>
-                            <td style="padding: 2px;">Semester</td><td style="padding: 2px;">: ${appState.settings.semester}</td>
+                            <td width="15%" style="padding: 2px;">NISN</td><td width="55%" style="padding: 2px;">: ${student.nis}</td>
+                            <td width="15%" style="padding: 2px;">Semester</td><td width="15%" style="padding: 2px;">: ${appState.settings.semester}</td>
                         </tr>
                     </table>
                     
-                    <h4 style="margin-bottom:8px; font-weight:bold;">A. Pencapaian Akademik</h4>
-                    <table style="width:100%; border-collapse:collapse; margin-bottom:25px; font-size:13px;">
+                    <h4 style="margin-bottom:6px; font-weight:bold; font-size:13px;">A. Pencapaian Akademik</h4>
+                    <table style="width:100%; border-collapse:collapse; margin-bottom:15px; font-size:13px;">
                         <thead style="background-color:#e5e7eb; font-weight:bold;">
                             ${tableHeader}
                         </thead>
                         <tbody>${gradesHtml}</tbody>
                     </table>
                     
-                    <table style="width: 100%; margin-bottom: 20px; font-size: 13px; border-collapse: collapse;">
+                    <table style="width: 100%; margin-bottom: 10px; font-size: 12px; border-collapse: collapse;">
                         <tr>
-                            <td style="width: 48%; vertical-align: top;">
-                                <h4 style="font-weight:bold; margin-bottom:8px;">B. Ekstrakurikuler & Kokurikuler</h4>
+                            <td width="48%" style="vertical-align: top;">
+                                <h4 style="font-weight:bold; margin-bottom:6px; font-size:12px;">B. Ekstrakurikuler & Kokurikuler</h4>
                                 <table style="width:100%; border-collapse:collapse;">
-                                    <tr><td style="border:1px solid black; padding:6px; font-weight:bold;">Kegiatan</td><td style="border:1px solid black; padding:6px; font-weight:bold; text-align:center;">Keterangan</td></tr>
-                                    <tr><td style="border:1px solid black; padding:6px;">${val('eks1_nama')||'Pramuka'}</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('eks1_ket')}</td></tr>
-                                    <tr><td style="border:1px solid black; padding:6px;">${val('eks2_nama')||'P5 (Kokurikuler)'}</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('eks2_ket')}</td></tr>
+                                    <tr><td width="60%" style="border:1px solid black; padding:5px; font-weight:bold;">Kegiatan</td><td width="40%" style="border:1px solid black; padding:5px; font-weight:bold; text-align:center;">Keterangan</td></tr>
+                                    <tr><td width="60%" style="border:1px solid black; padding:5px;">${val('eks1_nama')||'Pramuka'}</td><td width="40%" style="border:1px solid black; padding:5px; text-align:center;">${val('eks1_ket')}</td></tr>
+                                    <tr><td width="60%" style="border:1px solid black; padding:5px;">${val('eks2_nama')||'P5 (Kokurikuler)'}</td><td width="40%" style="border:1px solid black; padding:5px; text-align:center;">${val('eks2_ket')}</td></tr>
                                 </table>
                             </td>
-                            <td style="width: 4%;"></td>
-                            <td style="width: 48%; vertical-align: top;">
-                                <h4 style="font-weight:bold; margin-bottom:8px;">C. Ketidakhadiran</h4>
+                            <td width="4%"></td>
+                            <td width="48%" style="vertical-align: top;">
+                                <h4 style="font-weight:bold; margin-bottom:6px; font-size:12px;">C. Ketidakhadiran</h4>
                                 <table style="width:100%; border-collapse:collapse;">
-                                    <tr><td style="border:1px solid black; padding:6px;">Sakit</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('sakit')} hari</td></tr>
-                                    <tr><td style="border:1px solid black; padding:6px;">Izin</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('izin')} hari</td></tr>
-                                    <tr><td style="border:1px solid black; padding:6px;">Alpa Tanpa Keterangan</td><td style="border:1px solid black; padding:6px; text-align:center;">${val('alpa')} hari</td></tr>
+                                    <tr><td width="70%" style="border:1px solid black; padding:5px;">Sakit</td><td width="30%" style="border:1px solid black; padding:5px; text-align:center;">${val('sakit')} hari</td></tr>
+                                    <tr><td width="70%" style="border:1px solid black; padding:5px;">Izin</td><td width="30%" style="border:1px solid black; padding:5px; text-align:center;">${val('izin')} hari</td></tr>
+                                    <tr><td width="70%" style="border:1px solid black; padding:5px;">Alpa Tanpa Keterangan</td><td width="30%" style="border:1px solid black; padding:5px; text-align:center;">${val('alpa')} hari</td></tr>
                                 </table>
                             </td>
                         </tr>
                     </table>
 
-                    <h4 style="font-weight:bold; font-size:13px; margin-bottom:8px;">D. Catatan Wali Kelas</h4>
-                    <div style="border:1px solid black; padding:10px; min-height:60px; font-size:13px; margin-bottom:40px; font-style:italic;">
+                    <h4 style="font-weight:bold; font-size:12px; margin-bottom:6px;">D. Catatan Wali Kelas</h4>
+                    <div style="border:1px solid black; padding:8px; min-height:40px; font-size:12px; margin-bottom:12px; font-style:italic;">
                         "${val('catatan')}"
                     </div>
                     
-                    <table style="width:100%; text-align:center; font-size:14px; margin-top:20px; border-collapse: collapse;">
+                    <table style="width:100%; text-align:center; font-size:13px; margin-top:5px; border-collapse: collapse;">
                         <tr>
-                            <td style="width:33%; vertical-align: top;">Mengetahui,<br>Orang Tua/Wali<br><br><br><br>_________________</td>
-                            <td style="width:34%;"></td>
-                            <td style="width:33%; vertical-align: top;">${appState.settings.printDate}<br>Wali Kelas<br><br><br><br><b><u>${waliData?waliData.name:'-'}</u></b><br>NIP. ${waliData?waliData.nip:'-'}</td>
+                            <td width="33%" style="vertical-align: top;">Mengetahui,<br>Orang Tua/Wali<div style="height: 45px;"></div>_________________</td>
+                            <td width="34%"></td>
+                            <td width="33%" style="vertical-align: top;">${appState.settings.printDate}<br>Wali Kelas<div style="height: 45px;"></div><b><u>${waliData?waliData.name:'-'}</u></b><br>NIP. ${waliData?waliData.nip:'-'}</td>
                         </tr>
                         <tr>
-                            <td colspan="3" style="padding-top:40px; vertical-align: top;">Kepala Satuan Pendidikan<br><br><br><br><b><u>${appState.settings.headmasterName}</u></b><br>NIP. ${appState.settings.headmasterNip}</td>
+                            <td colspan="3" style="padding-top:10px; vertical-align: top;">Kepala Satuan Pendidikan<div style="height: 45px;"></div><b><u>${appState.settings.headmasterName}</u></b><br>NIP. ${appState.settings.headmasterNip}</td>
                         </tr>
                     </table>
                 </div>
@@ -1754,23 +1800,51 @@
         };
         
         window.printRapot = () => { 
-            const type = UI.val('rapot-type');
-            html2pdf().set({margin:0, filename:`Rapot_${type === 'mid' ? 'PTS' : 'Akhir'}.pdf`, html2canvas:{scale:2}, jsPDF:{unit:'mm', format:'legal'}}).from(document.getElementById('rapot-preview')).save(); 
+            const sId = UI.val('rapot-student');
+            if(!sId) { UI.toast("Pilih siswa terlebih dahulu!", "error"); return; }
+            
+            // Tambahkan mode print ke layar
+            document.body.classList.add('printing-rapot');
+            
+            // Beri jeda sangat sebentar lalu panggil fungsi Print bawaan browser
+            setTimeout(() => {
+                window.print();
+                // Setelah selesai diprint/dibatalkan, kembalikan layar ke normal
+                document.body.classList.remove('printing-rapot');
+            }, 500);
         };
         
         window.printAllRapot = () => { 
             const cls = UI.val('rapot-class'); 
             const type = UI.val('rapot-type');
             const stds = appState.students.filter(s => s.class === cls); 
-            if(!stds.length) return; 
-            let html = '<div style="background:white; color:black;">'; 
-            stds.forEach((s, i) => { 
-                html += getSingleRapotHTML(s, cls, type); 
-                if (i < stds.length - 1) html += '<div class="html2pdf__page-break"></div>'; 
-            }); 
-            html += '</div>'; 
-            const d = document.createElement('div'); d.innerHTML = html; 
-            html2pdf().set({margin:0, filename:`Semua_Rapot_${type === 'mid' ? 'PTS_' : ''}Kelas_${cls}.pdf`, html2canvas:{scale:2}, jsPDF:{unit:'mm', format:'legal'}}).from(d).save(); 
+            if(!stds.length) { UI.toast("Pilih kelas terlebih dahulu!", "error"); return; } 
+            
+            UI.toast("Menyiapkan kertas print...", "success");
+            
+            // Susun HTML seluruh siswa di kelas tersebut
+            let allHtml = '';
+            stds.forEach((s, i) => {
+                // Beri class 'cetak-satu-siswa' yang akan memaksa ganti halaman (kecuali siswa terakhir)
+                const isLast = (i === stds.length - 1);
+                allHtml += `<div class="${isLast ? '' : 'cetak-satu-siswa'}" style="width:100%;">${getSingleRapotHTML(s, cls, type)}</div>`;
+            });
+
+            // Tampilkan semuanya di wadah preview
+            UI.html('rapot-preview', allHtml);
+            UI.show('rapot-preview');
+            
+            // Masuk mode print
+            document.body.classList.add('printing-rapot');
+            
+            // Panggil dialog print browser setelah browser selesai menyusun tabel
+            setTimeout(() => {
+                window.print();
+                
+                // Setelah selesai Print, kembalikan aplikasi ke posisi normal
+                document.body.classList.remove('printing-rapot');
+                generateRapot(); // Kembalikan preview agar hanya menampilkan 1 siswa saja lagi
+            }, 800); 
         };
 
         window.downloadExcelKeaktifan = () => {
