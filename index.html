@@ -125,8 +125,8 @@
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // KELAS IVC TELAH DIHAPUS PERMANEN
         const SCHOOL_DATA = {
-            // IVC Dihapus dari daftar kelas
             classes: ['IA', 'IB', 'II', 'IIIA', 'IIIB', 'IIIC', 'IVA', 'IVB', 'VA', 'VB', 'VC', 'VIA', 'VIB', 'VIC'],
             subjects: [
                 'Pendidikan Agama Kristen & Budi Pekerti', 
@@ -173,7 +173,11 @@
         };
         
         let app, db, auth;
-        if (firebaseConfig) { app = initializeApp(firebaseConfig); db = getFirestore(app); auth = getAuth(app); }
+        if (firebaseConfig) { 
+            app = initializeApp(firebaseConfig); 
+            db = getFirestore(app); 
+            auth = getAuth(app); 
+        }
 
         async function initCloudApp() {
             UI.showLoading();
@@ -226,6 +230,7 @@
                     appState.thresholds = data.thresholds || appState.thresholds;
                     appState.settings = data.settings || appState.settings;
 
+                    // Nilai Default
                     if (!appState.settings.loginBg) appState.settings.loginBg = "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=2000";
                     if (!appState.settings.dashBg) appState.settings.dashBg = "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?q=80&w=2000";
                     if (!appState.settings.mainLogo) appState.settings.mainLogo = "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp";
@@ -253,47 +258,69 @@
                             appState.user.profilePic = currentT.profilePic; appState.user.name = currentT.name; renderHeader();
                         }
                     }
-                } else { initMocks(); saveDataToCloud(); }
+                } else { initMocks(); saveDataToCloud('all'); }
             }, (error) => { console.error("Snapshot error:", error); initMocks(); });
         }
 
         let saveTimer;
         let isCloudSaving = false;
-        let needsAnotherSave = false;
+        let pendingSaves = new Set();
 
-        window.saveDataToCloud = () => {
+        // SISTEM ANTI-MACET: PENGIRIMAN DATA DIPISAH AGAR LEBIH RINGAN
+        window.saveDataToCloud = (dataType = 'all') => {
             if (!db) return; 
+            pendingSaves.add(dataType);
+
             const ind = document.getElementById('cloud-sync-indicator');
             if(ind) { ind.classList.remove('hidden'); ind.innerHTML = '<i class="fas fa-sync fa-spin text-blue-500"></i> Menyimpan...'; }
             
             clearTimeout(saveTimer);
+            // Memberikan waktu jeda 2.5 detik agar pengetikan cepat tidak membombardir server
             saveTimer = setTimeout(async () => {
-                // Cegah penumpukan: Jika sistem sedang mengirim data ke cloud, antrikan saja
                 if (isCloudSaving) {
-                    needsAnotherSave = true;
+                    setTimeout(() => window.saveDataToCloud('all'), 1000);
                     return;
                 }
                 
                 isCloudSaving = true;
                 try {
+                    let payload = {};
+                    
+                    if (pendingSaves.has('all')) {
+                        payload = { students: appState.students, teachers: appState.teachers, grades: appState.grades, descriptions: appState.descriptions, thresholds: appState.thresholds, settings: appState.settings };
+                    } else {
+                        // Jika hanya update nilai, foto/setting tidak akan dikirim. 
+                        // Ini membuat ukuran file sangat kecil (Hanya beberapa Kilobyte) dan meniadakan error 'resource-exhausted'.
+                        if (pendingSaves.has('grades')) payload.grades = appState.grades;
+                        if (pendingSaves.has('students')) payload.students = appState.students;
+                        if (pendingSaves.has('teachers')) payload.teachers = appState.teachers;
+                        if (pendingSaves.has('settings')) payload.settings = appState.settings;
+                        if (pendingSaves.has('descriptions')) payload.descriptions = appState.descriptions;
+                        if (pendingSaves.has('thresholds')) payload.thresholds = appState.thresholds;
+                    }
+                    
+                    pendingSaves.clear(); 
+
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
-                    await setDoc(docRef, {
-                        students: appState.students, teachers: appState.teachers, grades: appState.grades,
-                        descriptions: appState.descriptions, thresholds: appState.thresholds, settings: appState.settings
-                    });
-                    if(ind) { ind.innerHTML = '<i class="fas fa-cloud-check text-emerald-500"></i> Tersimpan (Cloud)'; setTimeout(()=> ind.classList.add('hidden'), 2500); }
+                    await setDoc(docRef, payload, { merge: true });
+                    
+                    if(ind) { ind.innerHTML = '<i class="fas fa-cloud-check text-emerald-500"></i> Tersimpan'; setTimeout(()=> ind.classList.add('hidden'), 2500); }
                 } catch(e) {
                     console.error("Save error", e);
                     if(ind) { ind.innerHTML = '<i class="fas fa-exclamation-triangle text-red-500"></i> Gagal Simpan'; }
+                    
+                    if(e.message && e.message.includes('exceeds the maximum allowed size')) {
+                        UI.toast('MEMORI GAMBAR PENUH! Masuk ke "Pengaturan Sistem" (Bawah) lalu klik "Bersihkan Memori Gambar".', 'error');
+                    } else {
+                        UI.toast('Gagal terhubung ke Cloud. Pastikan koneksi stabil.', 'error');
+                    }
                 } finally {
                     isCloudSaving = false;
-                    // Jika ada data baru yang diketik saat proses simpan tadi, kirim ulang dengan aman
-                    if (needsAnotherSave) {
-                        needsAnotherSave = false;
-                        setTimeout(saveDataToCloud, 1000); 
+                    if (pendingSaves.size > 0) {
+                        setTimeout(() => window.saveDataToCloud('all'), 1000); 
                     }
                 }
-            }, 2500); // Waktu tunggu dinaikkan jadi 2.5 detik agar internet rileks
+            }, 2500); 
         };
 
         const UI = {
@@ -303,9 +330,9 @@
             showLoading: () => UI.show('global-loader'), hideLoading: () => UI.hide('global-loader'),
             toast: (msg, type = 'success') => {
                 const toast = document.createElement('div');
-                toast.className = `fixed bottom-4 right-4 text-white px-6 py-3 rounded-lg shadow-lg transition-opacity duration-300 z-[100] font-poppins no-print ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+                toast.className = `no-print fixed bottom-4 right-4 text-white px-6 py-3 rounded-lg shadow-lg transition-opacity duration-300 z-[100] font-poppins ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
                 toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-2"></i> ${msg}`;
-                document.body.appendChild(toast); setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+                document.body.appendChild(toast); setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, type === 'error' ? 5000 : 3000);
             },
             confirm: (msg, onConfirm) => {
                 document.getElementById('custom-confirm-msg').innerHTML = msg;
@@ -621,7 +648,8 @@
             const sId = el.dataset.s, sub = el.dataset.sub, f = el.dataset.f;
             let v = el.value; if(v !== '' && (v<0 || v>100)){ UI.toast('Nilai 0-100!','error'); el.value=''; v=''; }
             appState.grades[`${sId}_${sub}_${f}`] = v;
-            recalculateAverage(sId, sub); saveDataToCloud(); 
+            recalculateAverage(sId, sub); 
+            saveDataToCloud('grades'); 
         };
 
         window.recalculateAverage = (sId, sub) => {
@@ -837,7 +865,7 @@
             let cell = document.getElementById(`aktif_avg_${el.dataset.s}_${el.dataset.sub.replace(/[^a-zA-Z0-9]/g, '')}`);
             if(cell) cell.innerText = avg !== null ? avg : '-';
             recalculateAverage(el.dataset.s, el.dataset.sub); 
-            saveDataToCloud();
+            saveDataToCloud('grades');
         };
 
         function renderNilaiSikap() {
@@ -936,7 +964,7 @@
             let cell = document.getElementById(`sikap_avg_${el.dataset.s}_${el.dataset.sub.replace(/[^a-zA-Z0-9]/g, '')}`);
             if(cell) cell.innerText = avg !== null ? avg : '-';
             recalculateAverage(el.dataset.s, el.dataset.sub); 
-            saveDataToCloud();
+            saveDataToCloud('grades');
         };
 
         function renderDeskripsi() {
@@ -1039,7 +1067,7 @@
             appState.thresholds[`${sub}_${cls}_kktp_C`] = UI.val('kktp-c');
             
             ['A','B','C','D'].forEach(p => { appState.descriptions[`${sub}_${cls}_${p}`] = UI.val(`desc-${p}`); });
-            saveDataToCloud(); 
+            saveDataToCloud('descriptions'); saveDataToCloud('thresholds');
             loadDesc();
             UI.toast(`Deskripsi & KKTP ${sub} Kelas ${cls} tersimpan di Cloud!`, 'success');
         };
@@ -1056,6 +1084,48 @@
             } else {
                 UI.toast('Klik salah satu kotak deskripsi terlebih dahulu!', 'error');
             }
+        };
+
+        function renderAmbangBatas() {
+            let classOptions = appState.user.role === 'Wali Kelas' ? `<option value="${appState.user.assignedClass}">${appState.user.assignedClass}</option>` : SCHOOL_DATA.classes.map(c => `<option value="${c}">Kelas ${c}</option>`).join('');
+            let availableSubjects = appState.user.role === 'Guru Mapel' ? [appState.user.assignedSubject] : (appState.user.role === 'Wali Kelas' ? [...MAPEL_WALI_KELAS] : [...SCHOOL_DATA.subjects]);
+            let subjectOptions = availableSubjects.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            let content = `
+                <div class="mb-6"><h2 class="text-2xl font-bold text-gray-800 font-russo tracking-wide">Pengaturan Nilai Ambang Batas</h2><p class="text-gray-500 text-sm mt-1">Atur batas minimum dan maksimum Nilai Akhir per mata pelajaran dan kelas. Jika nilai akhir siswa melampaui batas ini, sistem akan memotong/menaikkannya secara otomatis.</p></div>
+                <div class="bg-white p-6 md:p-8 rounded-xl shadow-sm border max-w-4xl">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                        <div><label class="block text-xs font-bold text-gray-500 mb-1">Pilih Mata Pelajaran</label><select id="ambang-subject" onchange="loadAmbangBatas()" class="w-full border p-3 rounded-lg bg-gray-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none">${subjectOptions}</select></div>
+                        <div><label class="block text-xs font-bold text-gray-500 mb-1">Pilih Kelas</label><select id="ambang-class" onchange="loadAmbangBatas()" class="w-full border p-3 rounded-lg bg-gray-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none">${classOptions}</select></div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 border-t pt-6 border-gray-100">
+                        <div class="bg-red-50 p-4 rounded-xl border border-red-100"><label class="block text-xs font-bold text-red-600 mb-2 uppercase tracking-wide"><i class="fas fa-arrow-down mr-1"></i> Batas Nilai Minimum</label><input type="number" id="ambang-min" class="w-full border p-3 rounded-lg bg-white border-red-200 text-red-800 font-black text-xl text-center focus:ring-2 focus:ring-red-500 outline-none" placeholder="Kosongkan jika tidak dibatasi"></div>
+                        <div class="bg-green-50 p-4 rounded-xl border border-green-100"><label class="block text-xs font-bold text-green-600 mb-2 uppercase tracking-wide"><i class="fas fa-arrow-up mr-1"></i> Batas Nilai Maksimum</label><input type="number" id="ambang-max" class="w-full border p-3 rounded-lg bg-white border-green-200 text-green-800 font-black text-xl text-center focus:ring-2 focus:ring-green-500 outline-none" placeholder="Kosongkan jika tidak dibatasi"></div>
+                    </div>
+                    <div class="mt-6 flex justify-end">
+                        <button onclick="saveAmbangBatas()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl font-bold transition shadow-lg hover:-translate-y-0.5"><i class="fas fa-save mr-2"></i> Simpan Ambang Batas</button>
+                    </div>
+                </div>
+            `;
+            UI.html('view-ambang-batas', content);
+            if(document.getElementById('ambang-subject')) loadAmbangBatas();
+        }
+
+        window.loadAmbangBatas = () => {
+            const sub = UI.val('ambang-subject'); const cls = UI.val('ambang-class');
+            if(!sub || !cls) return;
+            const thresh = appState.thresholds[`${sub}_${cls}`];
+            document.getElementById('ambang-min').value = thresh && thresh.min !== undefined ? thresh.min : '';
+            document.getElementById('ambang-max').value = thresh && thresh.max !== undefined ? thresh.max : '';
+        };
+
+        window.saveAmbangBatas = () => {
+            const sub = UI.val('ambang-subject'); const cls = UI.val('ambang-class');
+            const min = UI.val('ambang-min'); const max = UI.val('ambang-max');
+            if(!sub || !cls) return;
+            appState.thresholds[`${sub}_${cls}`] = { min: min, max: max };
+            saveDataToCloud('thresholds');
+            UI.toast('Ambang batas berhasil disimpan!', 'success');
         };
 
         function renderProfilAkun() {
@@ -1107,7 +1177,7 @@
                 appState.teachers[teacherIndex].name = newName.trim(); appState.user.name = newName.trim();
                 let passChanged = false;
                 if (newPass && newPass.trim() !== '') { appState.teachers[teacherIndex].password = newPass.trim(); appState.user.password = newPass.trim(); passChanged = true; }
-                saveDataToCloud(); renderHeader(); 
+                saveDataToCloud('teachers'); renderHeader(); 
                 if (passChanged) { UI.toast('Nama & Sandi diperbarui!', 'success'); UI.val('my-new-password', ''); } else { UI.toast('Profil diperbarui!', 'success'); }
                 
                 const passInput = document.getElementById('my-new-password'); const eyeIcon = document.getElementById('eye-icon-profile');
@@ -1115,6 +1185,7 @@
             }
         };
 
+        // SUPER KOMPRESOR DENGAN DUKUNGAN TRANSPARANSI (WEBP)
         window.handleProfileUpload = (event) => {
             const file = event.target.files[0]; if (!file) return;
             if (!file.type.match('image.*')) { UI.toast("File harus gambar!", "error"); return; }
@@ -1122,13 +1193,27 @@
             reader.onload = (e) => {
                 const img = new Image();
                 img.onload = () => {
-                    const canvas = document.createElement('canvas'); const MAX = 200; let w = img.width, h = img.height;
+                    const canvas = document.createElement('canvas'); 
+                    let MAX = 150; 
+                    let w = img.width, h = img.height;
                     if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } } else { if (h > MAX) { w *= MAX / h; h = MAX; } }
-                    canvas.width = w; canvas.height = h; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-                    const dataUrl = canvas.toDataURL('image/png');
+                    canvas.width = w; canvas.height = h; const ctx = canvas.getContext('2d'); 
+                    
+                    // Membersihkan canvas (tanpa background putih)
+                    ctx.clearRect(0, 0, w, h);
+                    ctx.drawImage(img, 0, 0, w, h);
+                    
+                    // Menggunakan WEBP agar ukuran kecil TAPI background bisa transparan (seperti PNG)
+                    const dataUrl = canvas.toDataURL('image/webp', 0.6); 
+                    
                     appState.user.profilePic = dataUrl;
-                    const idx = appState.teachers.findIndex(t => t.id === appState.user.username); if(idx !== -1) appState.teachers[idx].profilePic = dataUrl;
-                    saveDataToCloud(); renderHeader(); if(appState.currentView === 'profil-akun') renderProfilAkun(); UI.toast("Foto diubah!", "success");
+                    const idx = appState.teachers.findIndex(t => t.id === appState.user.username); 
+                    if(idx !== -1) appState.teachers[idx].profilePic = dataUrl;
+                    
+                    saveDataToCloud('teachers'); 
+                    renderHeader(); 
+                    if(appState.currentView === 'profil-akun') renderProfilAkun(); 
+                    UI.toast("Foto Profil Berhasil Diperbarui!", "success");
                 }; img.src = e.target.result;
             }; reader.readAsDataURL(file);
         };
@@ -1163,7 +1248,7 @@
                 
                 <div class="bg-white rounded-xl shadow-sm border p-6 mt-6 mb-8">
                     <h3 class="text-gray-800 text-sm font-bold uppercase tracking-wider mb-4 border-b pb-2">
-                        <i class="fas fa-table text-blue-500 mr-2"></i> Rekapitulasi Gender & Agama Per Kelas
+                        <i class="fas fa-table text-blue-500 mr-2"></i> Rekapitulasi Gender (L/P) & Agama Per Kelas
                     </h3>
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm text-left border-collapse w-full">
@@ -1206,6 +1291,7 @@
             
             const classCounts = {}; if(role === 'Wali Kelas') { classCounts[appState.user.assignedClass] = 0; } else { SCHOOL_DATA.classes.forEach(c => classCounts[c] = 0); }
             targetStudents.forEach(s => { if(classCounts[s.class] !== undefined) classCounts[s.class]++; });
+            
             const relCounts = { 'Kristen': 0, 'Islam': 0, 'Katolik': 0, 'Hindu': 0, 'Buddha': 0 };
             targetStudents.forEach(s => { if(relCounts[s.religion] !== undefined) relCounts[s.religion]++; });
 
@@ -1232,10 +1318,10 @@
                     rekapHtml += `<tr class="border-b hover:bg-slate-50 bg-white">
                         <td class="p-3 border text-center font-bold bg-slate-50">${c}</td>
                         <td class="p-2 border text-center text-blue-800 font-semibold bg-blue-50/40">${krisL}</td><td class="p-2 border text-center text-pink-700 font-semibold bg-pink-50/40">${krisP}</td>
-                        <td class="p-2 border text-center text-blue-800 font-semibold bg-blue-50/40">${islL}</td><td class="p-2 border text-center text-pink-700 font-semibold bg-pink-50/40">${islP}</td>
-                        <td class="p-2 border text-center text-blue-800 font-semibold bg-blue-50/40">${katL}</td><td class="p-2 border text-center text-pink-700 font-semibold bg-pink-50/40">${katP}</td>
-                        <td class="p-2 border text-center text-blue-800 font-semibold bg-blue-50/40">${hinL}</td><td class="p-2 border text-center text-pink-700 font-semibold bg-pink-50/40">${hinP}</td>
-                        <td class="p-2 border text-center text-blue-800 font-semibold bg-blue-50/40">${budL}</td><td class="p-2 border text-center text-pink-700 font-semibold bg-pink-50/40">${budP}</td>
+                        <td class="p-2 border text-center text-emerald-800 font-semibold bg-emerald-50/40">${islL}</td><td class="p-2 border text-center text-pink-700 font-semibold bg-emerald-50/40">${islP}</td>
+                        <td class="p-2 border text-center text-yellow-800 font-semibold bg-yellow-50/40">${katL}</td><td class="p-2 border text-center text-pink-700 font-semibold bg-yellow-50/40">${katP}</td>
+                        <td class="p-2 border text-center text-red-800 font-semibold bg-red-50/40">${hinL}</td><td class="p-2 border text-center text-pink-700 font-semibold bg-red-50/40">${hinP}</td>
+                        <td class="p-2 border text-center text-purple-800 font-semibold bg-purple-50/40">${budL}</td><td class="p-2 border text-center text-pink-700 font-semibold bg-purple-50/40">${budP}</td>
                         <td class="p-3 border text-center font-black bg-orange-100 text-orange-900 text-lg">${stds.length}</td>
                     </tr>`;
                 }
@@ -1317,10 +1403,10 @@
                 appState.teachers.push({ id: id, name: UI.val('t-name'), nip: UI.val('t-nip'), role: role, assignedClass: role === 'Wali Kelas' ? UI.val('t-class') : '', assignedSubject: role === 'Guru Mapel' ? UI.val('t-subject') : '', password: '123' });
                 UI.toast('Ditambahkan!', 'success');
             }
-            saveDataToCloud(); closeTeacherModal(); loadTeacherTable();
+            saveDataToCloud('teachers'); closeTeacherModal(); loadTeacherTable();
         };
 
-        window.deleteTeacher = (id) => { if (id === 'admin') return; UI.confirm(`Hapus guru ${id}?`, () => { appState.teachers = appState.teachers.filter(t => t.id !== id); saveDataToCloud(); loadTeacherTable(); UI.toast('Dihapus'); }); };
+        window.deleteTeacher = (id) => { if (id === 'admin') return; UI.confirm(`Hapus guru ${id}?`, () => { appState.teachers = appState.teachers.filter(t => t.id !== id); saveDataToCloud('teachers'); loadTeacherTable(); UI.toast('Dihapus'); }); };
         
         window.showPasswordModal = (id) => { 
             window.changePasswordId = id; 
@@ -1332,7 +1418,7 @@
             UI.show('password-modal'); document.getElementById('password-modal').classList.add('flex'); 
         };
         window.closePasswordModal = () => { UI.hide('password-modal'); document.getElementById('password-modal').classList.remove('flex'); };
-        window.savePassword = (e) => { e.preventDefault(); const newPass = document.getElementById('new-password-input').value.trim(); if(newPass === '') return; const t = appState.teachers.find(x => x.id === window.changePasswordId); if(t) { t.password = newPass; saveDataToCloud(); UI.toast(`Sandi diubah!`, 'success'); } closePasswordModal(); };
+        window.savePassword = (e) => { e.preventDefault(); const newPass = document.getElementById('new-password-input').value.trim(); if(newPass === '') return; const t = appState.teachers.find(x => x.id === window.changePasswordId); if(t) { t.password = newPass; saveDataToCloud('teachers'); UI.toast(`Sandi diubah!`, 'success'); } closePasswordModal(); };
 
         function renderDataSiswa() {
             let classOptions = '<option value="">Semua Kelas</option>';
@@ -1451,7 +1537,7 @@
             
             UI.confirm(`Yakin ingin menghapus <b>${idsToDelete.length}</b> siswa terpilih secara massal?<br><br><span class="text-sm text-red-500">Tindakan ini tidak bisa dibatalkan!</span>`, () => {
                 appState.students = appState.students.filter(s => !idsToDelete.includes(s.id));
-                saveDataToCloud();
+                saveDataToCloud('students');
                 loadStudentTable();
                 UI.toast(`${idsToDelete.length} siswa berhasil dihapus!`, 'success');
             });
@@ -1503,10 +1589,10 @@
                 }); 
                 UI.toast('Siswa ditambahkan!', 'success'); 
             } 
-            saveDataToCloud(); closeAddStudentModal(); loadStudentTable(); 
+            saveDataToCloud('students'); closeAddStudentModal(); loadStudentTable(); 
         };
 
-        window.deleteStudent = (id) => { UI.confirm('Hapus siswa ini?', () => { appState.students = appState.students.filter(s => s.id !== id); saveDataToCloud(); loadStudentTable(); UI.toast('Dihapus'); }); };
+        window.deleteStudent = (id) => { UI.confirm('Hapus siswa ini?', () => { appState.students = appState.students.filter(s => s.id !== id); saveDataToCloud('students'); loadStudentTable(); UI.toast('Dihapus'); }); };
         
         window.downloadTemplateSiswa = () => { 
             if(typeof XLSX === 'undefined') return; 
@@ -1542,7 +1628,7 @@
                         count++; 
                     } 
                 }); 
-                if(count > 0) { saveDataToCloud(); loadStudentTable(); UI.toast(`Diimpor ${count} siswa!`, 'success'); } 
+                if(count > 0) { saveDataToCloud('students'); loadStudentTable(); UI.toast(`Diimpor ${count} siswa!`, 'success'); } 
                 e.target.value = ''; 
             }; 
             reader.readAsBinaryString(file); 
@@ -1618,7 +1704,10 @@
                         </div>
 
                         <div class="pt-8 mt-8 border-t border-gray-200 flex flex-col md:flex-row justify-between gap-4">
-                            <button type="button" onclick="resetDatabase()" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-6 py-3.5 rounded-xl font-bold transition"><i class="fas fa-trash-alt mr-2"></i> Kosongkan Data Siswa & Nilai</button>
+                            <div class="flex flex-col sm:flex-row gap-3">
+                                <button type="button" onclick="resetDatabase()" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-5 py-3.5 rounded-xl font-bold transition"><i class="fas fa-trash-alt mr-2"></i> Kosongkan Data</button>
+                                <button type="button" onclick="resetImages()" class="bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-200 px-5 py-3.5 rounded-xl font-bold transition" title="Gunakan ini jika muncul pesan error gagal simpan karena memori penuh"><i class="fas fa-broom mr-2"></i> Bersihkan Memori Gambar</button>
+                            </div>
                             <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/30 transition transform hover:-translate-y-0.5"><i class="fas fa-cloud-upload-alt mr-2"></i> Simpan Semua Pengaturan ke Cloud</button>
                         </div>
                     </form>
@@ -1627,6 +1716,7 @@
             UI.html('view-pengaturan', content);
         }
 
+        // SUPER KOMPRESOR DENGAN DUKUNGAN TRANSPARANSI (WEBP)
         window.handleImageSetting = (event, settingKey) => {
             const file = event.target.files[0]; if (!file) return;
             if (!file.type.match('image.*')) { UI.toast("File harus berupa gambar!", "error"); return; }
@@ -1637,32 +1727,27 @@
                 img.onload = () => {
                     const canvas = document.createElement('canvas'); 
                     
-                    let MAX_SIZE = 300;
-                    let mimeType = 'image/png';
-                    let quality = 0.92; 
+                    let MAX_SIZE = 300; 
+                    let quality = 0.8; 
 
                     if (settingKey === 'loginBg' || settingKey === 'dashBg') {
                         MAX_SIZE = 800; 
-                        mimeType = 'image/jpeg'; 
                         quality = 0.6; 
                     }
 
                     let w = img.width, h = img.height;
-                    
                     if (w > h) { if (w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } } 
                     else { if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; } }
                     
                     canvas.width = w; canvas.height = h; 
                     const ctx = canvas.getContext('2d'); 
                     
-                    if (mimeType === 'image/jpeg') {
-                        ctx.fillStyle = "#ffffff";
-                        ctx.fillRect(0, 0, w, h);
-                    }
-
+                    // Membersihkan canvas (tanpa background putih)
+                    ctx.clearRect(0, 0, w, h);
                     ctx.drawImage(img, 0, 0, w, h);
                     
-                    const dataUrl = canvas.toDataURL(mimeType, quality);
+                    // Menggunakan WEBP agar ukuran kecil TAPI background bisa transparan (seperti PNG)
+                    const dataUrl = canvas.toDataURL('image/webp', quality);
                     
                     if(settingKey === 'loginBg') {
                         document.getElementById('set-login-bg').value = dataUrl;
@@ -1672,8 +1757,7 @@
                         appState.settings[settingKey] = dataUrl;
                         renderPengaturan(); 
                     }
-                    
-                    UI.toast("Foto berhasil dimuat. Klik tombol 'Simpan Semua' di bawah!", "success");
+                    UI.toast("Foto siap. Jangan lupa klik 'Simpan Semua' di bawah!", "success");
                 }; 
                 img.src = e.target.result;
             }; 
@@ -1693,54 +1777,38 @@
             appState.settings.dashBg = UI.val('set-dash-bg'); 
             appState.settings.reportTitle = UI.val('set-report-title'); 
             appState.settings.midReportTitle = UI.val('set-mid-report-title'); 
-            saveDataToCloud(); 
+            saveDataToCloud('settings'); 
             UI.toast('Semua Pengaturan Tersimpan!', 'success'); 
             document.getElementById('header-title-year').innerText = `Tahun Ajaran ${appState.settings.academicYear}`; 
         };
+
+        window.resetImages = () => {
+            UI.confirm('Yakin ingin membersihkan memori gambar?<br><br><span class="text-xs">Tindakan ini akan mengembalikan semua foto profil dan logo ke bawaan awal untuk menyelamatkan penyimpanan Cloud Anda yang kepenuhan.</span>', () => {
+                appState.settings.loginBg = "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=2000";
+                appState.settings.dashBg = "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?q=80&w=2000";
+                appState.settings.mainLogo = "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp";
+                appState.settings.kopLeftLogo = "Lambang_Kota_Manado.jpg";
+                appState.settings.kopRightLogo = "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp";
+                
+                appState.teachers.forEach(t => {
+                    if(t.profilePic && t.profilePic.startsWith('data:image')) { t.profilePic = ""; }
+                });
+                if(appState.user) appState.user.profilePic = "";
+                
+                document.getElementById('set-login-bg').value = appState.settings.loginBg;
+                document.getElementById('set-dash-bg').value = appState.settings.dashBg;
+                
+                saveDataToCloud('settings');
+                saveDataToCloud('teachers');
+                
+                renderPengaturan();
+                renderHeader();
+                
+                UI.toast('Memori Gambar Berhasil Dikosongkan! Silakan coba menginput nilai kembali.', 'success');
+            });
+        };
         
-        window.resetDatabase = () => { UI.confirm('Yakin ingin <b>MENGHAPUS SEMUA DATA SISWA DAN NILAI</b>?<br><br><span class="text-sm text-red-500">Tindakan ini tidak bisa dibatalkan!</span>', () => { appState.students = []; appState.grades = {}; saveDataToCloud(); UI.toast('Database Dikosongkan!', 'success'); }); };
-
-        function renderAmbangBatas() {
-            let classOptions = appState.user.role === 'Wali Kelas' ? `<option value="${appState.user.assignedClass}">${appState.user.assignedClass}</option>` : SCHOOL_DATA.classes.map(c => `<option value="${c}">Kelas ${c}</option>`).join('');
-            let availableSubjects = appState.user.role === 'Guru Mapel' ? [appState.user.assignedSubject] : (appState.user.role === 'Wali Kelas' ? [...MAPEL_WALI_KELAS] : [...SCHOOL_DATA.subjects]);
-            let subjectOptions = availableSubjects.map(s => `<option value="${s}">${s}</option>`).join('');
-
-            let content = `
-                <div class="mb-6"><h2 class="text-2xl font-bold text-gray-800 font-russo tracking-wide">Pengaturan Nilai Ambang Batas</h2><p class="text-gray-500 text-sm mt-1">Atur batas minimum dan maksimum Nilai Akhir per mata pelajaran dan kelas. Jika nilai akhir siswa melampaui batas ini, sistem akan memotong/menaikkannya secara otomatis.</p></div>
-                <div class="bg-white p-6 md:p-8 rounded-xl shadow-sm border max-w-4xl">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-                        <div><label class="block text-xs font-bold text-gray-500 mb-1">Pilih Mata Pelajaran</label><select id="ambang-subject" onchange="loadAmbangBatas()" class="w-full border p-3 rounded-lg bg-gray-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none">${subjectOptions}</select></div>
-                        <div><label class="block text-xs font-bold text-gray-500 mb-1">Pilih Kelas</label><select id="ambang-class" onchange="loadAmbangBatas()" class="w-full border p-3 rounded-lg bg-gray-50 font-bold focus:ring-2 focus:ring-blue-500 outline-none">${classOptions}</select></div>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 border-t pt-6 border-gray-100">
-                        <div class="bg-red-50 p-4 rounded-xl border border-red-100"><label class="block text-xs font-bold text-red-600 mb-2 uppercase tracking-wide"><i class="fas fa-arrow-down mr-1"></i> Batas Nilai Minimum</label><input type="number" id="ambang-min" class="w-full border p-3 rounded-lg bg-white border-red-200 text-red-800 font-black text-xl text-center focus:ring-2 focus:ring-red-500 outline-none" placeholder="Kosongkan jika tidak dibatasi"></div>
-                        <div class="bg-green-50 p-4 rounded-xl border border-green-100"><label class="block text-xs font-bold text-green-600 mb-2 uppercase tracking-wide"><i class="fas fa-arrow-up mr-1"></i> Batas Nilai Maksimum</label><input type="number" id="ambang-max" class="w-full border p-3 rounded-lg bg-white border-green-200 text-green-800 font-black text-xl text-center focus:ring-2 focus:ring-green-500 outline-none" placeholder="Kosongkan jika tidak dibatasi"></div>
-                    </div>
-                    <div class="mt-6 flex justify-end">
-                        <button onclick="saveAmbangBatas()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl font-bold transition shadow-lg hover:-translate-y-0.5"><i class="fas fa-save mr-2"></i> Simpan Ambang Batas</button>
-                    </div>
-                </div>
-            `;
-            UI.html('view-ambang-batas', content);
-            if(document.getElementById('ambang-subject')) loadAmbangBatas();
-        }
-
-        window.loadAmbangBatas = () => {
-            const sub = UI.val('ambang-subject'); const cls = UI.val('ambang-class');
-            if(!sub || !cls) return;
-            const thresh = appState.thresholds[`${sub}_${cls}`];
-            document.getElementById('ambang-min').value = thresh && thresh.min !== undefined ? thresh.min : '';
-            document.getElementById('ambang-max').value = thresh && thresh.max !== undefined ? thresh.max : '';
-        };
-
-        window.saveAmbangBatas = () => {
-            const sub = UI.val('ambang-subject'); const cls = UI.val('ambang-class');
-            const min = UI.val('ambang-min'); const max = UI.val('ambang-max');
-            if(!sub || !cls) return;
-            appState.thresholds[`${sub}_${cls}`] = { min: min, max: max };
-            saveDataToCloud();
-            UI.toast('Ambang batas berhasil disimpan!', 'success');
-        };
+        window.resetDatabase = () => { UI.confirm('Yakin ingin <b>MENGHAPUS SEMUA DATA SISWA DAN NILAI</b>?<br><br><span class="text-sm text-red-500">Tindakan ini tidak bisa dibatalkan!</span>', () => { appState.students = []; appState.grades = {}; saveDataToCloud('all'); UI.toast('Database Dikosongkan!', 'success'); }); };
 
         function renderRekapitulasi() {
             let classOptions = appState.user.role === 'Wali Kelas' ? `<option value="${appState.user.assignedClass}">${appState.user.assignedClass}</option>` : '<option value="">-- Pilih Kelas --</option>' + SCHOOL_DATA.classes.map(c => `<option value="${c}">Kelas ${c}</option>`).join('');
@@ -1808,7 +1876,7 @@
                 rows += `<tr class="bg-white"><td class="border p-2 sticky-col bg-white z-10">${i+1}</td><td class="border p-2 sticky-col left-[40px] font-semibold bg-white z-10">${s.name}</td><td class="border p-1"><input type="number" class="w-full text-center border p-1" data-s="${s.id}" data-f="sakit" value="${val('sakit')}" oninput="saveNon(this)"></td><td class="border p-1"><input type="number" class="w-full text-center border p-1" data-s="${s.id}" data-f="izin" value="${val('izin')}" oninput="saveNon(this)"></td><td class="border p-1"><input type="number" class="w-full text-center border p-1" data-s="${s.id}" data-f="alpa" value="${val('alpa')}" oninput="saveNon(this)"></td><td class="border p-1"><input type="text" class="w-full border p-1" data-s="${s.id}" data-f="eks1_nama" value="${val('eks1_nama')}" oninput="saveNon(this)"></td><td class="border p-1"><input type="text" class="w-full border p-1" data-s="${s.id}" data-f="eks1_ket" value="${val('eks1_ket')}" oninput="saveNon(this)"></td><td class="border p-1"><input type="text" class="w-full border p-1" data-s="${s.id}" data-f="eks2_nama" value="${val('eks2_nama')}" oninput="saveNon(this)"></td><td class="border p-1"><input type="text" class="w-full border p-1" data-s="${s.id}" data-f="eks2_ket" value="${val('eks2_ket')}" oninput="saveNon(this)"></td><td class="border p-1"><textarea class="w-full border p-1 h-10" data-s="${s.id}" data-f="catatan" oninput="saveNon(this)">${val('catatan')}</textarea></td></tr>`;
             }); UI.html('non-akademik-table-body', rows);
         };
-        window.saveNon = (el) => { appState.grades[`${el.dataset.s}_${el.dataset.f}`] = el.value; saveDataToCloud(); };
+        window.saveNon = (el) => { appState.grades[`${el.dataset.s}_${el.dataset.f}`] = el.value; saveDataToCloud('grades'); };
 
         function renderRapot() {
             let classOptions = appState.user.role === 'Wali Kelas' ? `<option value="${appState.user.assignedClass}">${appState.user.assignedClass}</option>` : '<option value="">-- Pilih Kelas --</option>' + SCHOOL_DATA.classes.map(c => `<option value="${c}">Kelas ${c}</option>`).join('');
@@ -2143,131 +2211,6 @@
             }, 800); 
         };
 
-        window.downloadExcelKeaktifan = () => {
-            if(typeof XLSX === 'undefined') { UI.toast("Alat Excel sedang dimuat.", "error"); return; }
-            const sub = UI.val('filter-subject-aktif'); const cls = UI.val('filter-class-aktif');
-            if(!cls || !sub) { UI.toast("Pilih kelas dan mapel terlebih dahulu!", "error"); return; }
-            let table = document.getElementById("keaktifan-table-export"); let clone = table.cloneNode(true);
-            let inputs = clone.querySelectorAll("input"); inputs.forEach(input => { let textNode = document.createTextNode(input.value || ''); input.parentNode.replaceChild(textNode, input); });
-            let wb = XLSX.utils.table_to_book(clone, {sheet:"Keaktifan"}); XLSX.writeFile(wb, `Data_Keaktifan_${sub.replace(/\//g,'_')}_Kelas_${cls}.xlsx`);
-            UI.toast("File Excel berhasil diunduh!", "success");
-        };
-
-        window.printPDFKeaktifan = () => {
-            const sub = UI.val('filter-subject-aktif'); const cls = UI.val('filter-class-aktif');
-            if(!cls || !sub) { UI.toast("Pilih kelas dan mapel terlebih dahulu!", "error"); return; }
-            UI.toast("Merakit PDF...", "success");
-            
-            let stds = appState.students.filter(s => s.class === cls);
-            if (sub === 'Pendidikan Agama Kristen & Budi Pekerti') stds = stds.filter(s => s.religion === 'Kristen');
-            if (sub === 'Pendidikan Agama Islam & Budi Pekerti') stds = stds.filter(s => s.religion === 'Islam');
-
-            let tbodyHtml = '';
-            stds.forEach((s, i) => {
-                const val = (f) => appState.grades[`${s.id}_${sub}_aktif_${f}`] || '-';
-                let avg = getKeaktifanAvg(s.id, sub) !== null ? getKeaktifanAvg(s.id, sub) : '-';
-                tbodyHtml += `
-                    <tr>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${i+1}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${s.nis}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold; text-align: left;">${s.name}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('bertanya')}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('menjawab')}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('memperhatikan')}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('kerjasama')}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('mencatat')}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; font-weight: bold; color: #c2410c;">${avg}</td>
-                    </tr>
-                `;
-            });
-            const htmlString = `
-                <div style="font-family: Arial, sans-serif; width: 100%; padding: 10px;">
-                    <h3 style="text-align: center; margin-bottom: 5px;">REKAP NILAI KEAKTIFAN - KELAS ${cls}</h3>
-                    <p style="text-align: center; font-weight:bold; margin-bottom: 20px;">Mata Pelajaran: ${sub}</p>
-                    <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center;">
-                        <thead>
-                            <tr style="background-color: #f1f5f9;">
-                                <th style="border: 1px solid #cbd5e1; padding: 8px; width: 30px;">No</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">NISN</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: left;">Nama Siswa</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Bertanya</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Menjawab</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Memperhatikan</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Kerjasama</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Mencatat</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Nilai Keaktifan</th>
-                            </tr>
-                        </thead>
-                        <tbody>${tbodyHtml}</tbody>
-                    </table>
-                </div>
-            `;
-            const opt = { margin: 10, filename: `Data_Keaktifan_${sub.replace(/\//g,'_')}_Kelas_${cls}.pdf`, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } };
-            html2pdf().set(opt).from(htmlString).save();
-        };
-
-        window.downloadExcelSikap = () => {
-            if(typeof XLSX === 'undefined') { UI.toast("Alat Excel sedang dimuat.", "error"); return; }
-            const sub = UI.val('filter-subject-sikap'); const cls = UI.val('filter-class-sikap');
-            if(!cls || !sub) { UI.toast("Pilih kelas dan mapel terlebih dahulu!", "error"); return; }
-            let table = document.getElementById("sikap-table-export"); let clone = table.cloneNode(true);
-            let inputs = clone.querySelectorAll("input"); inputs.forEach(input => { let textNode = document.createTextNode(input.value || ''); input.parentNode.replaceChild(textNode, input); });
-            let wb = XLSX.utils.table_to_book(clone, {sheet:"Sikap"}); XLSX.writeFile(wb, `Data_Sikap_${sub.replace(/\//g,'_')}_Kelas_${cls}.xlsx`);
-            UI.toast("File Excel berhasil diunduh!", "success");
-        };
-
-        window.printPDFSikap = () => {
-            const sub = UI.val('filter-subject-sikap'); const cls = UI.val('filter-class-sikap');
-            if(!cls || !sub) { UI.toast("Pilih kelas dan mapel terlebih dahulu!", "error"); return; }
-            UI.toast("Merakit PDF...", "success");
-            
-            let stds = appState.students.filter(s => s.class === cls);
-            if (sub === 'Pendidikan Agama Kristen & Budi Pekerti') stds = stds.filter(s => s.religion === 'Kristen');
-            if (sub === 'Pendidikan Agama Islam & Budi Pekerti') stds = stds.filter(s => s.religion === 'Islam');
-
-            let tbodyHtml = '';
-            stds.forEach((s, i) => {
-                const val = (f) => appState.grades[`${s.id}_${sub}_sikap_${f}`] || '-';
-                let avg = getSikapAvg(s.id, sub) !== null ? getSikapAvg(s.id, sub) : '-';
-                tbodyHtml += `
-                    <tr>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${i+1}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${s.nis}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold; text-align: left;">${s.name}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('disiplin')}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('tanggungjawab')}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('jujur')}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('peduli')}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${val('kesopanan')}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; font-weight: bold; color: #be185d;">${avg}</td>
-                    </tr>
-                `;
-            });
-            const htmlString = `
-                <div style="font-family: Arial, sans-serif; width: 100%; padding: 10px;">
-                    <h3 style="text-align: center; margin-bottom: 5px;">REKAP PENILAIAN SIKAP - KELAS ${cls}</h3>
-                    <p style="text-align: center; font-weight:bold; margin-bottom: 20px;">Mata Pelajaran: ${sub}</p>
-                    <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center;">
-                        <thead>
-                            <tr style="background-color: #f1f5f9;">
-                                <th style="border: 1px solid #cbd5e1; padding: 8px; width: 30px;">No</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">NISN</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: left;">Nama Siswa</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Disiplin</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Tanggungjawab</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Jujur</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Peduli</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Kesopanan</th>
-                                <th style="border: 1px solid #cbd5e1; padding: 8px;">Nilai Sikap</th>
-                            </tr>
-                        </thead>
-                        <tbody>${tbodyHtml}</tbody>
-                    </table>
-                </div>
-            `;
-            const opt = { margin: 10, filename: `Data_Sikap_${sub.replace(/\//g,'_')}_Kelas_${cls}.pdf`, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } };
-            html2pdf().set(opt).from(htmlString).save();
-        };
     </script>
     
     <div id="global-loader" class="fixed inset-0 bg-slate-900/80 z-[100] flex flex-col items-center justify-center backdrop-blur-md">
