@@ -124,6 +124,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
         // KELAS IVC TELAH DIHAPUS PERMANEN
         const SCHOOL_DATA = {
@@ -131,6 +132,9 @@
             subjects: [
                 'Pendidikan Agama Kristen & Budi Pekerti', 
                 'Pendidikan Agama Islam & Budi Pekerti', 
+                'Pendidikan Agama Katolik & Budi Pekerti',
+                'Pendidikan Agama Hindu & Budi Pekerti',
+                'Pendidikan Agama Buddha & Budi Pekerti',
                 'Pendidikan Pancasila', 
                 'Bahasa Indonesia', 
                 'Matematika', 
@@ -144,6 +148,7 @@
 
         const MAPEL_BIDANG_STUDI = [
             'Pendidikan Agama Kristen & Budi Pekerti', 'Pendidikan Agama Islam & Budi Pekerti', 
+            'Pendidikan Agama Katolik & Budi Pekerti', 'Pendidikan Agama Hindu & Budi Pekerti', 'Pendidikan Agama Buddha & Budi Pekerti',
             'PJOK', 'Bahasa Inggris', 'KKA (Koding dan Kecerdasan Artifisial)'
         ];
         const MAPEL_WALI_KELAS = SCHOOL_DATA.subjects.filter(s => !MAPEL_BIDANG_STUDI.includes(s));
@@ -172,11 +177,12 @@
             messagingSenderId: "760127633818", appId: "1:760127633818:web:1ae67b75927bc1ed45e223", measurementId: "G-9H4XRH5K5G"
         };
         
-        let app, db, auth;
+        let app, db, auth, storage;
         if (firebaseConfig) { 
             app = initializeApp(firebaseConfig); 
             db = getFirestore(app); 
             auth = getAuth(app); 
+            storage = getStorage(app);
         }
 
         async function initCloudApp() {
@@ -606,8 +612,11 @@
             UI.html('table-title', `Kelas ${cls} - ${sub}`);
             
             let studentsInClass = appState.students.filter(s => s.class === cls);
-            if (sub === 'Pendidikan Agama Kristen & Budi Pekerti') studentsInClass = studentsInClass.filter(s => s.religion === 'Kristen');
-            else if (sub === 'Pendidikan Agama Islam & Budi Pekerti') studentsInClass = studentsInClass.filter(s => s.religion === 'Islam');
+            if (sub.includes('Agama Kristen')) studentsInClass = studentsInClass.filter(s => s.religion === 'Kristen');
+            else if (sub.includes('Agama Islam')) studentsInClass = studentsInClass.filter(s => s.religion === 'Islam');
+            else if (sub.includes('Agama Katolik')) studentsInClass = studentsInClass.filter(s => s.religion === 'Katolik');
+            else if (sub.includes('Agama Hindu')) studentsInClass = studentsInClass.filter(s => s.religion === 'Hindu');
+            else if (sub.includes('Agama Buddha')) studentsInClass = studentsInClass.filter(s => s.religion === 'Buddha');
 
             if(studentsInClass.length === 0) { UI.html('grade-table-body', `<tr><td colspan="30" class="text-center p-8 bg-white font-semibold text-gray-500">Tidak ada siswa yang sesuai untuk mata pelajaran ini.</td></tr>`); return; }
 
@@ -691,8 +700,11 @@
             UI.toast("Merakit PDF Mendatar...", "success");
             
             let studentsInClass = appState.students.filter(s => s.class === cls);
-            if (sub === 'Pendidikan Agama Kristen & Budi Pekerti') studentsInClass = studentsInClass.filter(s => s.religion === 'Kristen');
-            if (sub === 'Pendidikan Agama Islam & Budi Pekerti') studentsInClass = studentsInClass.filter(s => s.religion === 'Islam');
+            if (sub.includes('Agama Kristen')) studentsInClass = studentsInClass.filter(s => s.religion === 'Kristen');
+            if (sub.includes('Agama Islam')) studentsInClass = studentsInClass.filter(s => s.religion === 'Islam');
+            if (sub.includes('Agama Katolik')) studentsInClass = studentsInClass.filter(s => s.religion === 'Katolik');
+            if (sub.includes('Agama Hindu')) studentsInClass = studentsInClass.filter(s => s.religion === 'Hindu');
+            if (sub.includes('Agama Buddha')) studentsInClass = studentsInClass.filter(s => s.religion === 'Buddha');
 
             let tbodyHtml = '';
             studentsInClass.forEach((s, i) => {
@@ -833,8 +845,11 @@
             const cls = UI.val('filter-class-aktif'); const sub = UI.val('filter-subject-aktif');
             if(!cls || !sub) return;
             let stds = appState.students.filter(s => s.class === cls);
-            if (sub === 'Pendidikan Agama Kristen & Budi Pekerti') stds = stds.filter(s => s.religion === 'Kristen');
-            if (sub === 'Pendidikan Agama Islam & Budi Pekerti') stds = stds.filter(s => s.religion === 'Islam');
+            if (sub.includes('Agama Kristen')) stds = stds.filter(s => s.religion === 'Kristen');
+            if (sub.includes('Agama Islam')) stds = stds.filter(s => s.religion === 'Islam');
+            if (sub.includes('Agama Katolik')) stds = stds.filter(s => s.religion === 'Katolik');
+            if (sub.includes('Agama Hindu')) stds = stds.filter(s => s.religion === 'Hindu');
+            if (sub.includes('Agama Buddha')) stds = stds.filter(s => s.religion === 'Buddha');
 
             let rows = '';
             stds.forEach((s, i) => {
@@ -932,8 +947,11 @@
             const cls = UI.val('filter-class-sikap'); const sub = UI.val('filter-subject-sikap');
             if(!cls || !sub) return;
             let stds = appState.students.filter(s => s.class === cls);
-            if (sub === 'Pendidikan Agama Kristen & Budi Pekerti') stds = stds.filter(s => s.religion === 'Kristen');
-            if (sub === 'Pendidikan Agama Islam & Budi Pekerti') stds = stds.filter(s => s.religion === 'Islam');
+            if (sub.includes('Agama Kristen')) stds = stds.filter(s => s.religion === 'Kristen');
+            if (sub.includes('Agama Islam')) stds = stds.filter(s => s.religion === 'Islam');
+            if (sub.includes('Agama Katolik')) stds = stds.filter(s => s.religion === 'Katolik');
+            if (sub.includes('Agama Hindu')) stds = stds.filter(s => s.religion === 'Hindu');
+            if (sub.includes('Agama Buddha')) stds = stds.filter(s => s.religion === 'Buddha');
 
             let rows = '';
             stds.forEach((s, i) => {
@@ -1185,10 +1203,11 @@
             }
         };
 
-        // SUPER KOMPRESOR DENGAN DUKUNGAN TRANSPARANSI (WEBP)
+        // SUPER KOMPRESOR (WEBP Transparan)
         window.handleProfileUpload = (event) => {
             const file = event.target.files[0]; if (!file) return;
             if (!file.type.match('image.*')) { UI.toast("File harus gambar!", "error"); return; }
+            
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
@@ -1199,11 +1218,9 @@
                     if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } } else { if (h > MAX) { w *= MAX / h; h = MAX; } }
                     canvas.width = w; canvas.height = h; const ctx = canvas.getContext('2d'); 
                     
-                    // Membersihkan canvas (tanpa background putih)
                     ctx.clearRect(0, 0, w, h);
                     ctx.drawImage(img, 0, 0, w, h);
                     
-                    // Menggunakan WEBP agar ukuran kecil TAPI background bisa transparan (seperti PNG)
                     const dataUrl = canvas.toDataURL('image/webp', 0.6); 
                     
                     appState.user.profilePic = dataUrl;
@@ -1283,8 +1300,11 @@
             const role = appState.user.role; let targetStudents = appState.students; let titleDesc = "Seluruh Siswa di Sekolah";
             if (role === 'Wali Kelas') { targetStudents = targetStudents.filter(s => s.class === appState.user.assignedClass); titleDesc = `Siswa Kelas ${appState.user.assignedClass}`; } 
             else if (role === 'Guru Mapel') {
-                if (appState.user.assignedSubject === 'Pendidikan Agama Kristen & Budi Pekerti') { targetStudents = targetStudents.filter(s => s.religion === 'Kristen'); titleDesc = "Seluruh Siswa Beragama Kristen"; } 
-                else if (appState.user.assignedSubject === 'Pendidikan Agama Islam & Budi Pekerti') { targetStudents = targetStudents.filter(s => s.religion === 'Islam'); titleDesc = "Seluruh Siswa Beragama Islam"; } 
+                if (appState.user.assignedSubject.includes('Agama Kristen')) { targetStudents = targetStudents.filter(s => s.religion === 'Kristen'); titleDesc = "Seluruh Siswa Beragama Kristen"; } 
+                else if (appState.user.assignedSubject.includes('Agama Islam')) { targetStudents = targetStudents.filter(s => s.religion === 'Islam'); titleDesc = "Seluruh Siswa Beragama Islam"; } 
+                else if (appState.user.assignedSubject.includes('Agama Katolik')) { targetStudents = targetStudents.filter(s => s.religion === 'Katolik'); titleDesc = "Seluruh Siswa Beragama Katolik"; } 
+                else if (appState.user.assignedSubject.includes('Agama Hindu')) { targetStudents = targetStudents.filter(s => s.religion === 'Hindu'); titleDesc = "Seluruh Siswa Beragama Hindu"; } 
+                else if (appState.user.assignedSubject.includes('Agama Buddha')) { targetStudents = targetStudents.filter(s => s.religion === 'Buddha'); titleDesc = "Seluruh Siswa Beragama Buddha"; } 
                 else { titleDesc = `Siswa Mata Pelajaran ${appState.user.assignedSubject}`; }
             }
             const statTotalEl = document.getElementById('stat-total-siswa'); if(statTotalEl) { statTotalEl.innerText = targetStudents.length; document.getElementById('stat-desc').innerText = titleDesc; }
@@ -1467,7 +1487,13 @@
             const canEdit = appState.user.role === 'Admin' || appState.user.role === 'Wali Kelas';
             let filtered = appState.students;
             
-            if (appState.user.role === 'Guru Mapel') { if (appState.user.assignedSubject === 'Pendidikan Agama Kristen & Budi Pekerti') filtered = filtered.filter(s => s.religion === 'Kristen'); if (appState.user.assignedSubject === 'Pendidikan Agama Islam & Budi Pekerti') filtered = filtered.filter(s => s.religion === 'Islam'); }
+            if (appState.user.role === 'Guru Mapel') { 
+                if (appState.user.assignedSubject.includes('Agama Kristen')) filtered = filtered.filter(s => s.religion === 'Kristen'); 
+                if (appState.user.assignedSubject.includes('Agama Islam')) filtered = filtered.filter(s => s.religion === 'Islam'); 
+                if (appState.user.assignedSubject.includes('Agama Katolik')) filtered = filtered.filter(s => s.religion === 'Katolik'); 
+                if (appState.user.assignedSubject.includes('Agama Hindu')) filtered = filtered.filter(s => s.religion === 'Hindu'); 
+                if (appState.user.assignedSubject.includes('Agama Buddha')) filtered = filtered.filter(s => s.religion === 'Buddha'); 
+            }
             if (classFilter) filtered = filtered.filter(s => s.class === classFilter);
             if (searchQuery) filtered = filtered.filter(s => s.name.toLowerCase().includes(searchQuery) || s.nis.includes(searchQuery));
             
@@ -1479,7 +1505,13 @@
             
             let rows = '';
             filtered.forEach((s, i) => {
-                let badgeColor = s.religion === 'Islam' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : (s.religion === 'Kristen' ? 'bg-blue-100 text-blue-800 border-blue-200' : 'bg-gray-100 text-gray-800 border-gray-200');
+                let badgeColor = 'bg-gray-100 text-gray-800 border-gray-200';
+                if(s.religion === 'Islam') badgeColor = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                else if(s.religion === 'Kristen') badgeColor = 'bg-blue-100 text-blue-800 border-blue-200';
+                else if(s.religion === 'Katolik') badgeColor = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                else if(s.religion === 'Hindu') badgeColor = 'bg-red-100 text-red-800 border-red-200';
+                else if(s.religion === 'Buddha') badgeColor = 'bg-purple-100 text-purple-800 border-purple-200';
+                
                 let genderBadge = s.gender === 'P' ? 'bg-pink-50 text-pink-700 border-pink-200' : 'bg-blue-50 text-blue-700 border-blue-200';
                 
                 rows += `<tr class="hover:bg-slate-50">
@@ -1705,7 +1737,7 @@
 
                         <div class="pt-8 mt-8 border-t border-gray-200 flex flex-col md:flex-row justify-between gap-4">
                             <div class="flex flex-col sm:flex-row gap-3">
-                                <button type="button" onclick="resetDatabase()" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-5 py-3.5 rounded-xl font-bold transition"><i class="fas fa-trash-alt mr-2"></i> Kosongkan Data</button>
+                                <button type="button" onclick="resetDatabase()" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-300 px-5 py-3.5 rounded-xl font-bold transition shadow-sm"><i class="fas fa-trash-alt mr-2"></i> Kosongkan Data (Bahaya)</button>
                                 <button type="button" onclick="resetImages()" class="bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-200 px-5 py-3.5 rounded-xl font-bold transition" title="Gunakan ini jika muncul pesan error gagal simpan karena memori penuh"><i class="fas fa-broom mr-2"></i> Bersihkan Memori Gambar</button>
                             </div>
                             <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/30 transition transform hover:-translate-y-0.5"><i class="fas fa-cloud-upload-alt mr-2"></i> Simpan Semua Pengaturan ke Cloud</button>
@@ -1716,7 +1748,7 @@
             UI.html('view-pengaturan', content);
         }
 
-        // SUPER KOMPRESOR DENGAN DUKUNGAN TRANSPARANSI (WEBP)
+        // SUPER KOMPRESOR (WEBP Transparan)
         window.handleImageSetting = (event, settingKey) => {
             const file = event.target.files[0]; if (!file) return;
             if (!file.type.match('image.*')) { UI.toast("File harus berupa gambar!", "error"); return; }
@@ -1742,11 +1774,9 @@
                     canvas.width = w; canvas.height = h; 
                     const ctx = canvas.getContext('2d'); 
                     
-                    // Membersihkan canvas (tanpa background putih)
                     ctx.clearRect(0, 0, w, h);
                     ctx.drawImage(img, 0, 0, w, h);
                     
-                    // Menggunakan WEBP agar ukuran kecil TAPI background bisa transparan (seperti PNG)
                     const dataUrl = canvas.toDataURL('image/webp', quality);
                     
                     if(settingKey === 'loginBg') {
@@ -1804,11 +1834,24 @@
                 renderPengaturan();
                 renderHeader();
                 
-                UI.toast('Memori Gambar Berhasil Dikosongkan! Silakan coba menginput nilai kembali.', 'success');
+                UI.toast('Memori Gambar Berhasil Dikosongkan!', 'success');
             });
         };
         
-        window.resetDatabase = () => { UI.confirm('Yakin ingin <b>MENGHAPUS SEMUA DATA SISWA DAN NILAI</b>?<br><br><span class="text-sm text-red-500">Tindakan ini tidak bisa dibatalkan!</span>', () => { appState.students = []; appState.grades = {}; saveDataToCloud('all'); UI.toast('Database Dikosongkan!', 'success'); }); };
+        // PENCEGAHAN TINGKAT TINGGI: RESET DATABASE HARUS MENGETIK PASSWORD
+        window.resetDatabase = () => { 
+            const pass = prompt("🚨 PERINGATAN SUPER BERBAHAYA! 🚨\n\nTindakan ini akan MENGHAPUS PERMANEN seluruh nama siswa dan nilai dari server. Data yang terhapus TIDAK BISA kembali.\n\nJika Anda benar-benar yakin dan sadar, ketik kata di bawah ini dengan huruf besar semua:\n\nHAPUS SEMUA");
+            
+            if (pass === "HAPUS SEMUA") {
+                appState.students = []; 
+                appState.grades = {}; 
+                saveDataToCloud('all'); 
+                UI.toast('Database Dikosongkan!', 'success'); 
+                setTimeout(() => window.location.reload(), 1500);
+            } else if (pass !== null) {
+                UI.toast('Penghapusan dibatalkan. Kata kunci salah.', 'error');
+            }
+        };
 
         function renderRekapitulasi() {
             let classOptions = appState.user.role === 'Wali Kelas' ? `<option value="${appState.user.assignedClass}">${appState.user.assignedClass}</option>` : '<option value="">-- Pilih Kelas --</option>' + SCHOOL_DATA.classes.map(c => `<option value="${c}">Kelas ${c}</option>`).join('');
@@ -1833,7 +1876,7 @@
             let activeSubjects = SCHOOL_DATA.subjects.filter(sub => { if(sub === 'IPAS' && isFaseA) return false; if(sub === 'KKA (Koding dan Kecerdasan Artifisial)' && (isFaseA || isFaseB)) return false; return true; });
 
             let headHtml = `<tr><th class="p-3 border sticky-col-header z-30">No</th><th class="p-3 border sticky-col-header left-[40px] z-30">Nama Lengkap</th>`;
-            activeSubjects.forEach(sub => { let s = sub; if(s.includes('KKA')) s = 'KKA'; else if(s.includes('Kristen')) s = 'Agama K'; else if(s.includes('Islam')) s = 'Agama I'; else if(s.includes('Pancasila')) s = 'PKN'; else if(s.includes('Indonesia')) s = 'B. Ind'; else if(s.includes('Inggris')) s = 'B. Ing'; else if(s.includes('Matematika')) s = 'MTK'; else if(s.includes('Seni')) s = 'SBdP'; headHtml += `<th class="p-3 border text-center bg-blue-800 z-20 px-4">${s}</th>`; });
+            activeSubjects.forEach(sub => { let s = sub; if(s.includes('KKA')) s = 'KKA'; else if(s.includes('Kristen')) s = 'Agama K'; else if(s.includes('Islam')) s = 'Agama I'; else if(s.includes('Pancasila')) s = 'PKN'; else if(s.includes('Indonesia')) s = 'B. Ind'; else if(s.includes('Inggris')) s = 'B. Ing'; else if(s.includes('Matematika')) s = 'MTK'; else if(s.includes('Seni')) s = 'SBdP'; else if(s.includes('Katolik')) s = 'Agama Kt'; else if(s.includes('Hindu')) s = 'Agama H'; else if(s.includes('Buddha')) s = 'Agama B'; headHtml += `<th class="p-3 border text-center bg-blue-800 z-20 px-4">${s}</th>`; });
             headHtml += `<th class="p-3 border text-center bg-orange-600 z-20">Jml</th><th class="p-3 border text-center bg-blue-600 z-20">Rata</th></tr>`;
             thead.innerHTML = headHtml;
 
@@ -1841,8 +1884,14 @@
             studentsInClass.forEach((s, i) => {
                 let rowScores = ''; let total = 0, count = 0;
                 activeSubjects.forEach(sub => {
-                    if ((sub === 'Pendidikan Agama Kristen & Budi Pekerti' && s.religion !== 'Kristen') || (sub === 'Pendidikan Agama Islam & Budi Pekerti' && s.religion !== 'Islam')) { rowScores += `<td class="border p-2 text-center">-</td>`; } 
-                    else { let na = getNilaiAkhir(s.id, sub); rowScores += `<td class="border p-2 text-center font-bold">${na}</td>`; if(na !== '-') { total += na; count++; } }
+                    if (sub.includes('Agama') && !sub.includes(s.religion)) { 
+                        rowScores += `<td class="border p-2 text-center">-</td>`; 
+                    } 
+                    else { 
+                        let na = getNilaiAkhir(s.id, sub); 
+                        rowScores += `<td class="border p-2 text-center font-bold">${na}</td>`; 
+                        if(na !== '-') { total += na; count++; } 
+                    }
                 });
                 let avg = count > 0 ? (total / count).toFixed(1) : '-'; let dispTot = count > 0 ? total : '-';
                 bodyHtml += `<tr class="hover:bg-blue-50 bg-white"><td class="border p-2 text-center sticky-col bg-white z-10">${i+1}</td><td class="border p-2 sticky-col left-[40px] font-bold bg-white z-10 whitespace-nowrap text-blue-900">${s.name}</td>${rowScores}<td class="border p-2 text-center font-black bg-orange-50">${dispTot}</td><td class="border p-2 text-center font-black bg-blue-50">${avg}</td></tr>`;
@@ -1932,8 +1981,7 @@
             const isFaseA = ['IA', 'IB', 'II'].includes(cls); const isFaseB = ['IIIA', 'IIIB', 'IIIC', 'IVA', 'IVB'].includes(cls);
             
             SCHOOL_DATA.subjects.forEach((sub) => {
-                if (sub === 'Pendidikan Agama Kristen & Budi Pekerti' && student.religion !== 'Kristen') return;
-                if (sub === 'Pendidikan Agama Islam & Budi Pekerti' && student.religion !== 'Islam') return;
+                if (sub.includes('Agama') && !sub.includes(student.religion)) return;
                 if (sub === 'IPAS' && isFaseA) return; if (sub === 'KKA (Koding dan Kecerdasan Artifisial)' && (isFaseA || isFaseB)) return;
 
                 let score = getNilaiAkhir(sId, sub); 
