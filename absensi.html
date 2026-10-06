@@ -211,6 +211,11 @@
             if (!account) { UI.toast('Username tidak terdaftar di E-Rapot!', 'error'); return; }
             if (account.password !== passIn) { UI.toast('Kata sandi salah!', 'error'); return; }
             
+            // PENDETEKSI PERAN OTOMATIS (Mencegah error jika pakai akun lama)
+            let roleStr = account.role || '';
+            if (roleStr.includes('Satpam')) account.role = 'Satpam';
+            else if (roleStr.includes('Piket')) account.role = 'Piket';
+            
             appState.user = account;
             UI.hide('login-screen'); UI.show('app-screen'); 
             
