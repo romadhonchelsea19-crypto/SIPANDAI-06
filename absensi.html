@@ -41,10 +41,12 @@
         #sidebar-overlay { z-index: 40; }
 
         @media print {
-            body { background: white; }
+            body { background: white !important; }
+            #app-screen, #login-screen { display: none !important; }
             .no-print { display: none !important; }
-            #print-area { display: block !important; }
-            .qr-card { page-break-inside: avoid; border: 2px solid #000; padding: 10px; margin: 10px; width: 250px; text-align: center; display: inline-block; }
+            
+            #print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; padding: 10px; }
+            .qr-card { page-break-inside: avoid; border: 2px solid #0f172a; padding: 15px; margin: 15px; width: 240px; text-align: center; display: inline-block; background: white; border-radius: 12px; }
         }
     </style>
 </head>
@@ -68,6 +70,15 @@
             scannedStudent: null, html5QrcodeScanner: null, currentView: 'scanner', isProcessingScan: false
         };
 
+        window.currentFacingMode = "environment"; // Default kamera belakang
+
+        // --- PRELOAD VOICES (Agar suara Google langsung siap) ---
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = function() {
+                window.availableVoices = window.speechSynthesis.getVoices();
+            };
+        }
+
         const UI = {
             show: (id) => document.getElementById(id)?.classList.remove('hidden'),
             hide: (id) => document.getElementById(id)?.classList.add('hidden'),
@@ -79,11 +90,61 @@
                 toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'} mr-2"></i> ${msg}`;
                 document.body.appendChild(toast); setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
             },
-            playBeep: () => {
+            playBeep: (type = 'beep', voiceText = 'Absen Berhasil') => {
+                if (type === 'mute') return;
+
+                // FITUR KECERDASAN BUATAN (SUARA NATURAL)
+                if (type === 'voice') {
+                    if ('speechSynthesis' in window) {
+                        window.speechSynthesis.cancel(); 
+                        const msg = new SpeechSynthesisUtterance(voiceText);
+                        
+                        // Mencari suara bahasa Indonesia dengan kualitas terbaik (Google/Premium)
+                        let voices = window.availableVoices || window.speechSynthesis.getVoices();
+                        let bestVoice = voices.find(v => v.lang.includes('id') && v.name.includes('Google')) || 
+                                        voices.find(v => v.lang.includes('id') && (v.name.includes('Female') || v.name.includes('Damayanti'))) ||
+                                        voices.find(v => v.lang.includes('id'));
+                        
+                        if (bestVoice) { msg.voice = bestVoice; }
+                        
+                        msg.lang = 'id-ID'; 
+                        msg.rate = 0.95; // Sedikit diperlambat agar lebih jelas dan santai (tidak terburu-buru)
+                        msg.pitch = 1.0; // Nada normal (tidak cempreng seperti robot)
+                        
+                        window.speechSynthesis.speak(msg);
+                        return;
+                    } else {
+                        // Fallback jika browser tidak mendukung
+                        type = voiceText.includes('Berhasil') ? 'chime' : 'error';
+                    }
+                }
+
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator(); osc.type = 'sine'; osc.frequency.setValueAtTime(800, ctx.currentTime);
-                osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.1);
+                const osc = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+                osc.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                
+                if (type === 'chime') {
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(523.25, ctx.currentTime); osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.1); 
+                    gainNode.gain.setValueAtTime(0.3, ctx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3);
+                } else if (type === 'bell') {
+                    osc.type = 'triangle'; osc.frequency.setValueAtTime(1046.50, ctx.currentTime); gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.6);
+                } else if (type === 'error') {
+                    osc.type = 'square'; osc.frequency.setValueAtTime(200, ctx.currentTime); gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
+                } else {
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(800, ctx.currentTime); gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1); osc.start(); osc.stop(ctx.currentTime + 0.1);
+                }
             }
+        };
+
+        window.testSound = () => {
+            const soundType = UI.val('set-sound-scan');
+            UI.playBeep(soundType, 'Absen Berhasil');
         };
 
         async function initCloudApp() {
@@ -103,7 +164,7 @@
                     appState.teachers = data.teachers || [];
                     
                     if (!appState.settings.schoolName) appState.settings.schoolName = "SD NEGERI 06 MANADO";
-                    if (!appState.settings.attendance) appState.settings.attendance = { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [] };
+                    if (!appState.settings.attendance) appState.settings.attendance = { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice' };
                     if (!appState.settings.loginBg) appState.settings.loginBg = "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=2000";
                     if (!appState.settings.mainLogo) appState.settings.mainLogo = "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp";
 
@@ -159,7 +220,6 @@
             if(account.role === 'Wali Kelas' && account.assignedClass) roleText += ` (${account.assignedClass})`;
             UI.html('header-user-role', roleText);
             
-            // RENDERING MENU SIDEBAR BERDASARKAN PERAN/ROLE
             renderSidebar();
             
             if (window.innerWidth < 1024) { appState.sidebarOpen = false; document.getElementById('sidebar').classList.add('-translate-x-full'); } 
@@ -173,10 +233,12 @@
             let role = appState.user.role;
             let html = `
                 <a href="#" onclick="switchView('scanner')" data-view="scanner" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition bg-emerald-800 border-l-4 border-white text-white"><i class="fas fa-camera w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Scanner Kamera</span></a>
-                <a href="#" onclick="switchView('manual')" data-view="manual" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-edit w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Input Manual (S/I/A)</span></a>
             `;
             
-            // HANYA ADMIN & WALI KELAS YANG BISA LIHAT REKAP & CETAK KARTU
+            if (role === 'Wali Kelas' || role === 'Admin' || role === 'Kepsek' || role === 'Guru Mapel') {
+                html += `<a href="#" onclick="switchView('manual')" data-view="manual" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-edit w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Input Manual (S/I/A)</span></a>`;
+            }
+            
             if (role === 'Admin' || role === 'Kepsek' || role === 'Wali Kelas') {
                 html += `
                     <a href="#" onclick="switchView('rekap')" data-view="rekap" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-calendar-check w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Rekap Kehadiran</span></a>
@@ -184,7 +246,6 @@
                 `;
             }
             
-            // HANYA ADMIN YANG BISA UBAH PENGATURAN JAM/LIBUR
             if (role === 'Admin' || role === 'Kepsek') {
                 html += `<a href="#" onclick="switchView('pengaturan')" data-view="pengaturan" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-cogs w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Pengaturan Absensi</span></a>`;
             }
@@ -201,8 +262,8 @@
                     appState.html5QrcodeScanner.clear(); appState.html5QrcodeScanner = null;
                 }).catch(err => { appState.html5QrcodeScanner = null; }); 
             }
-            UI.html('camera-container', '<div id="reader" class="absolute inset-0 w-full h-full" style="box-shadow: none;"></div>');
-            UI.show('camera-activate-btn-container'); UI.hide('scanner-idle'); UI.hide('scanner-action');
+            
+            UI.hide('camera-wrapper'); UI.show('camera-activate-btn-container'); UI.hide('scanner-idle'); UI.hide('scanner-action');
             
             const passInput = document.getElementById('login-password'); const eyeIcon = document.getElementById('eye-icon-login');
             if(passInput) passInput.type = 'password'; if(eyeIcon) { eyeIcon.classList.remove('fa-eye-slash'); eyeIcon.classList.add('fa-eye'); }
@@ -226,12 +287,24 @@
             });
             UI.show(`view-${viewName}`);
             
+            // PENTING: Jika bukan di menu kamera, matikan kamera sepenuhnya & hapus instance-nya
             if (viewName !== 'scanner' && appState.html5QrcodeScanner) {
                 appState.html5QrcodeScanner.stop().then(() => {
-                    appState.html5QrcodeScanner.clear(); appState.html5QrcodeScanner = null;
-                }).catch(err => { appState.html5QrcodeScanner = null; });
-                UI.html('camera-container', '<div id="reader" class="absolute inset-0 w-full h-full" style="box-shadow: none;"></div>');
-                UI.show('camera-activate-btn-container'); UI.hide('scanner-idle'); UI.hide('scanner-action');
+                    appState.html5QrcodeScanner.clear(); 
+                    appState.html5QrcodeScanner = null; 
+                    
+                    // Kembalikan ke tampilan awal "Tombol Aktifkan Kamera"
+                    UI.hide('camera-wrapper');
+                    UI.show('camera-activate-btn-container'); 
+                    UI.hide('scanner-idle'); 
+                    UI.hide('scanner-action');
+                    document.getElementById('reader').innerHTML = ''; 
+                }).catch(err => { 
+                    appState.html5QrcodeScanner = null; 
+                    UI.hide('camera-wrapper');
+                    UI.show('camera-activate-btn-container'); 
+                    document.getElementById('reader').innerHTML = '';
+                });
             }
 
             if (viewName === 'scanner') renderScanner();
@@ -262,34 +335,85 @@
         }
 
         window.startScanner = () => {
-            UI.hide('camera-activate-btn-container'); UI.show('scanner-idle');
-            appState.html5QrcodeScanner = new Html5Qrcode("reader");
+            UI.hide('camera-activate-btn-container'); 
+            UI.show('camera-wrapper'); 
+            UI.show('scanner-idle');
+            
+            if(!appState.html5QrcodeScanner) {
+                appState.html5QrcodeScanner = new Html5Qrcode("reader");
+            }
+            
             const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
             
-            appState.html5QrcodeScanner.start({ facingMode: "environment" }, config, (decodedText) => {
-                if (window.isProcessingScan) return; window.isProcessingScan = true; 
-                appState.html5QrcodeScanner.pause(); 
-                UI.playBeep(); processScan(decodedText);
+            appState.html5QrcodeScanner.start({ facingMode: window.currentFacingMode }, config, (decodedText) => {
+                // GEMBOK ANTI SCAN-ABU ABU: Jika sedang memproses 1 siswa, tolak kartu lain, jangan matikan kamera!
+                if (window.isProcessingScan) return; 
+                
+                window.isProcessingScan = true; // Kunci gembok
+                processScan(decodedText);
+                
             }, (errorMessage) => { }).catch((err) => {
                 UI.toast("Gagal mengakses kamera. Pastikan izin kamera aktif.", "error");
-                UI.show('camera-activate-btn-container'); UI.hide('scanner-idle');
+                UI.show('camera-activate-btn-container'); UI.hide('camera-wrapper'); UI.hide('scanner-idle');
             });
+        };
+
+        window.switchCamera = () => {
+            if (appState.html5QrcodeScanner) {
+                appState.html5QrcodeScanner.stop().then(() => {
+                    window.currentFacingMode = window.currentFacingMode === "environment" ? "user" : "environment";
+                    appState.html5QrcodeScanner.clear();
+                    appState.html5QrcodeScanner = null;
+                    document.getElementById('reader').innerHTML = '';
+                    setTimeout(() => { window.startScanner(); }, 200);
+                    UI.toast(window.currentFacingMode === "user" ? "Beralih ke Kamera Depan" : "Beralih ke Kamera Belakang", "success");
+                }).catch(err => {
+                    console.error("Gagal mengganti kamera", err);
+                    UI.toast("Gagal menukar kamera", "error");
+                });
+            }
         };
 
         window.processScan = (studentId) => {
             const student = appState.students.find(s => s.id === studentId);
+            const userSound = appState.settings.attendance?.scanSound || 'voice';
+
             if (!student) { 
                 UI.toast("QR Code Tidak Dikenali!", "error"); 
-                setTimeout(() => { 
-                    window.isProcessingScan = false; 
-                    if(appState.html5QrcodeScanner) appState.html5QrcodeScanner.resume(); 
-                }, 2000); 
+                UI.playBeep(userSound === 'voice' ? 'voice' : 'error', 'Tidak Dikenali'); 
+                // Buka gembok setelah 2 detik agar bisa scan kartu lain
+                setTimeout(() => { window.isProcessingScan = false; }, 2000); 
                 return; 
             }
 
             appState.scannedStudent = student;
-            let timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
             
+            // CEK ANTI-DOUBLE SCAN
+            let tzoffset = (new Date()).getTimezoneOffset() * 60000; 
+            const todayKey = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
+            
+            if (appState.attendance && appState.attendance[todayKey] && appState.attendance[todayKey][student.id]) {
+                const prevData = appState.attendance[todayKey][student.id];
+                
+                UI.playBeep(userSound === 'voice' ? 'voice' : 'error', 'Sudah Absen');
+
+                UI.hide('scanner-idle');
+                UI.html('scanner-action', `
+                    <div class="animate-fade-in bg-blue-500 text-white rounded-2xl p-6 shadow-xl text-center border-4 border-white transform transition-all scale-105">
+                        <i class="fas fa-info-circle text-6xl mb-3 animate-bounce"></i>
+                        <h3 class="text-2xl font-black mb-1 uppercase tracking-wider">${student.name}</h3>
+                        <div class="text-3xl font-black font-russo uppercase drop-shadow-md">SUDAH ABSEN</div>
+                        <p class="text-sm font-medium mt-2 opacity-90"><i class="fas fa-history mr-1"></i> Tercatat pkl ${prevData.time} WITA</p>
+                    </div>
+                `);
+                UI.show('scanner-action');
+                
+                // Jika iseng scan 2 kali, tampilkan info selama 2 detik lalu reset otomatis
+                setTimeout(() => { resumeAfterSave(); }, 2000);
+                return; 
+            }
+
+            let timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
             const attSettings = appState.settings.attendance || { startTime: '07:15' };
             const limitTime = attSettings.startTime;
             
@@ -300,6 +424,7 @@
         window.saveAttendance = (status) => {
             if(!appState.scannedStudent) return;
             const student = appState.scannedStudent;
+            const userSound = appState.settings.attendance?.scanSound || 'voice';
             
             let tzoffset = (new Date()).getTimezoneOffset() * 60000; 
             const todayKey = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
@@ -313,6 +438,9 @@
             UI.hide('scanner-idle');
             
             if (status === 'Terlambat') {
+                // JIKA TERLAMBAT: Berhenti & Munculkan Tombol WA
+                UI.playBeep(userSound === 'voice' ? 'voice' : 'error', 'Siswa Terlambat'); 
+
                 let phone = student.parentPhone || ''; if (phone.startsWith('0')) phone = '62' + phone.substring(1);
                 let message = `*PEMBERITAHUAN KEHADIRAN*\n\nYth. Orang Tua/Wali dari *${student.name}*,\n\nKami menginformasikan bahwa ananda telah tiba di sekolah pada pukul *${timeStr} WITA* dengan status kehadiran: *TERLAMBAT*.\n\nMohon bimbingan di rumah agar ananda dapat berangkat lebih awal. Terima kasih.\n\n_Sistem Absensi ${appState.settings.schoolName}_`;
                 
@@ -328,12 +456,15 @@
                         <p class="text-sm font-medium text-gray-600 mb-4"><i class="fas fa-clock mr-1"></i> Jam Scan: ${timeStr} WITA</p>
                         <div class="flex flex-col gap-2">
                             <a href="${waLink}" target="${phone ? '_blank' : '_self'}" onclick="${waBtnClick}" class="${waBtnClass} py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition"><i class="fab fa-whatsapp text-lg"></i> Kirim WA Orang Tua</a>
-                            <button onclick="resumeAfterSave()" class="bg-white border-2 border-yellow-300 hover:bg-yellow-100 text-yellow-800 py-3 rounded-xl font-bold transition">Lewati & Scan Berikutnya</button>
+                            <button onclick="resumeAfterSave()" class="bg-white border-2 border-yellow-300 hover:bg-yellow-100 text-yellow-800 py-3 rounded-xl font-bold transition text-xs">Abaikan (Scan Berikutnya)</button>
                         </div>
                     </div>
                 `);
                 UI.show('scanner-action');
             } else {
+                // JIKA HADIR (TEPAT WAKTU): Mode Super Kilat, tidak ada tombol WA
+                UI.playBeep(userSound, 'Absen Berhasil'); 
+
                 UI.html('scanner-action', `
                     <div class="animate-fade-in bg-emerald-500 text-white rounded-2xl p-6 shadow-xl text-center border-4 border-white transform transition-all scale-105">
                         <i class="fas fa-check-circle text-6xl mb-3 animate-bounce"></i>
@@ -343,21 +474,22 @@
                     </div>
                 `);
                 UI.show('scanner-action');
+                
+                // JEDA KILAT 1.5 DETIK lalu siap scan siswa di belakangnya
                 setTimeout(() => { resumeAfterSave(); }, 1500);
             }
         };
 
+        // Fungsi Membersihkan Layar & Membuka Gembok Kamera
         window.resumeAfterSave = () => {
             appState.scannedStudent = null;
-            UI.hide('scanner-action'); UI.show('scanner-idle');
-            window.isProcessingScan = false; 
-            if(appState.html5QrcodeScanner) appState.html5QrcodeScanner.resume();
+            UI.hide('scanner-action'); 
+            UI.show('scanner-idle');
+            window.isProcessingScan = false; // Buka gembok agar bisa baca kartu baru
         };
 
-        /* ---------------- FITUR: INPUT MANUAL (S/I/A) ---------------- */
         window.renderManual = () => {
             let classOptions = '<option value="">-- Pilih Kelas --</option>';
-            // BATASAN HAK AKSES WALI KELAS
             if (appState.user.role === 'Wali Kelas') {
                 classOptions = `<option value="${appState.user.assignedClass}">Kelas ${appState.user.assignedClass}</option>`;
             } else {
@@ -370,7 +502,7 @@
             let html = `
                 <div class="mb-6">
                     <h2 class="text-2xl font-bold font-russo tracking-wide text-slate-800">Input Manual (Sakit/Izin/Alpa)</h2>
-                    <p class="text-sm text-gray-500 mt-1">Gunakan menu ini jika siswa membawa surat izin/sakit atau alpa, agar masuk ke rekap kalender.</p>
+                    <p class="text-sm text-gray-500 mt-1">Gunakan menu ini untuk siswa yang membawa surat izin/sakit atau tidak masuk.</p>
                 </div>
                 
                 <div class="bg-white p-4 rounded-xl shadow-sm border mb-4 flex flex-col sm:flex-row gap-4">
@@ -402,17 +534,12 @@
                 </div>
             `;
             UI.html('view-manual', html);
-            if (appState.user.role === 'Wali Kelas') loadManualTable(); // Auto load untuk Wali Kelas
+            if (appState.user.role === 'Wali Kelas') loadManualTable();
         };
 
         window.loadManualTable = () => {
-            const dateKey = UI.val('manual-date');
-            const cls = UI.val('manual-class');
-            
-            if(!dateKey || !cls) { 
-                UI.html('manual-tbody', '<tr><td colspan="3" class="p-8 text-center text-gray-500 font-bold">Silakan pilih kelas terlebih dahulu.</td></tr>'); 
-                return; 
-            }
+            const dateKey = UI.val('manual-date'); const cls = UI.val('manual-class');
+            if(!dateKey || !cls) { UI.html('manual-tbody', '<tr><td colspan="3" class="p-8 text-center text-gray-500 font-bold">Silakan pilih kelas terlebih dahulu.</td></tr>'); return; }
             
             let stds = appState.students.filter(s => s.class === cls);
             stds.sort((a,b) => a.name.localeCompare(b.name));
@@ -420,9 +547,7 @@
             let tbody = '';
             stds.forEach((s, i) => {
                 let currentStatus = '';
-                if(appState.attendance && appState.attendance[dateKey] && appState.attendance[dateKey][s.id]) {
-                    currentStatus = appState.attendance[dateKey][s.id].status;
-                }
+                if(appState.attendance && appState.attendance[dateKey] && appState.attendance[dateKey][s.id]) { currentStatus = appState.attendance[dateKey][s.id].status; }
                 
                 const btn = (type, color, label, icon) => {
                     let isActive = currentStatus === type;
@@ -438,19 +563,8 @@
                 tbody += `
                     <tr class="hover:bg-slate-50">
                         <td class="p-4 text-center font-bold text-gray-500">${i+1}</td>
-                        <td class="p-4">
-                            <div class="font-bold text-gray-800">${s.name}</div>
-                            <div class="font-mono text-xs text-gray-500">${s.nis}</div>
-                        </td>
-                        <td class="p-4 text-center">
-                            <div class="flex flex-wrap justify-center gap-2">
-                                ${btn('Hadir', 'emerald', 'Hadir', 'fa-check-circle')}
-                                ${btn('Sakit', 'blue', 'Sakit', 'fa-procedures')}
-                                ${btn('Izin', 'orange', 'Izin', 'fa-envelope-open-text')}
-                                ${btn('Alpa', 'red', 'Alpa', 'fa-user-times')}
-                                <button onclick="setManual('${s.id}', 'Hapus')" class="px-4 py-2 rounded-lg font-bold text-xs bg-gray-100 text-gray-500 hover:bg-gray-200 ml-2 border"><i class="fas fa-eraser mr-1"></i>Kosongkan</button>
-                            </div>
-                        </td>
+                        <td class="p-4"><div class="font-bold text-gray-800">${s.name}</div><div class="font-mono text-xs text-gray-500">${s.nis}</div></td>
+                        <td class="p-4 text-center"><div class="flex flex-wrap justify-center gap-2">${btn('Hadir', 'emerald', 'Hadir', 'fa-check-circle')}${btn('Sakit', 'blue', 'Sakit', 'fa-procedures')}${btn('Izin', 'orange', 'Izin', 'fa-envelope-open-text')}${btn('Alpa', 'red', 'Alpa', 'fa-user-times')}<button onclick="setManual('${s.id}', 'Hapus')" class="px-4 py-2 rounded-lg font-bold text-xs bg-gray-100 text-gray-500 hover:bg-gray-200 ml-2 border"><i class="fas fa-eraser mr-1"></i>Kosongkan</button></div></td>
                     </tr>
                 `;
             });
@@ -462,45 +576,49 @@
             if(!appState.attendance) appState.attendance = {};
             if(!appState.attendance[dateKey]) appState.attendance[dateKey] = {};
             
-            if(status === 'Hapus') {
-                delete appState.attendance[dateKey][sId];
-            } else {
+            if(status === 'Hapus') { delete appState.attendance[dateKey][sId]; } 
+            else {
                 let timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
                 appState.attendance[dateKey][sId] = { status: status, time: timeStr, manual: true };
             }
             
-            saveDataToCloud('attendance');
-            loadManualTable();
-            UI.toast('Status berhasil diperbarui!');
+            saveDataToCloud('attendance'); loadManualTable(); UI.toast('Status diperbarui!');
         };
-        /* ----------------------------------------------------------------- */
 
         window.renderRekapitulasi = () => {
             let classOptions = '<option value="ALL">Semua Kelas</option>';
-            // BATASAN HAK AKSES WALI KELAS
-            if (appState.user.role === 'Wali Kelas') {
-                classOptions = `<option value="${appState.user.assignedClass}">Kelas ${appState.user.assignedClass}</option>`;
-            } else {
-                classOptions += [...new Set(appState.students.map(s=>s.class))].sort().map(c => `<option value="${c}">Kelas ${c}</option>`).join('');
-            }
+            if (appState.user.role === 'Wali Kelas') { classOptions = `<option value="${appState.user.assignedClass}">Kelas ${appState.user.assignedClass}</option>`; } 
+            else { classOptions += [...new Set(appState.students.map(s=>s.class))].sort().map(c => `<option value="${c}">Kelas ${c}</option>`).join(''); }
             
             let monthOpts = '';
-            let dateKeys = Object.keys(appState.attendance);
+            let dateKeys = Object.keys(appState.attendance || {});
             let monthYears = new Set();
+            
+            // Masukkan bulan dari data yang sudah ada
             dateKeys.forEach(k => { monthYears.add(k.substring(0, 7)); }); 
             
-            let todayMY = new Date().toISOString().substring(0,7);
-            monthYears.add(todayMY); 
+            // FITUR BARU: Tambahkan 6 bulan terakhir agar list "Lebih Lengkap" otomatis
+            let now = new Date();
+            for(let i=0; i<6; i++) {
+                let d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                let y = d.getFullYear();
+                let m = (d.getMonth() + 1).toString().padStart(2, '0');
+                monthYears.add(`${y}-${m}`);
+            }
+            
+            let tzoffset = (new Date()).getTimezoneOffset() * 60000; 
+            let todayMY = new Date(Date.now() - tzoffset).toISOString().substring(0,7);
             
             Array.from(monthYears).sort().reverse().forEach(my => {
                 let [y, m] = my.split('-');
-                let monthName = new Date(y, parseInt(m)-1, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-                monthOpts += `<option value="${my}" ${my === todayMY ? 'selected' : ''}>${monthName} ${y}</option>`;
+                
+                // PERBAIKAN BUG: Format tanggal sekarang otomatis sudah bersih tanpa tahun ganda
+                let monthNameAndYear = new Date(y, parseInt(m)-1, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+                
+                monthOpts += `<option value="${my}" ${my === todayMY ? 'selected' : ''}>${monthNameAndYear}</option>`;
             });
 
-            UI.html('rekap-class-filter', classOptions);
-            UI.html('rekap-month-filter', monthOpts);
-            loadRekapTable();
+            UI.html('rekap-class-filter', classOptions); UI.html('rekap-month-filter', monthOpts); loadRekapTable();
         };
 
         window.loadRekapTable = () => {
@@ -607,12 +725,8 @@
 
         window.renderDataSiswa = () => {
             let classOptions = '<option value="ALL">Semua Kelas</option>';
-            // BATASAN HAK AKSES WALI KELAS
-            if (appState.user.role === 'Wali Kelas') {
-                classOptions = `<option value="${appState.user.assignedClass}">Kelas ${appState.user.assignedClass}</option>`;
-            } else {
-                classOptions += [...new Set(appState.students.map(s=>s.class))].sort().map(c => `<option value="${c}">Kelas ${c}</option>`).join('');
-            }
+            if (appState.user.role === 'Wali Kelas') { classOptions = `<option value="${appState.user.assignedClass}">Kelas ${appState.user.assignedClass}</option>`; } 
+            else { classOptions += [...new Set(appState.students.map(s=>s.class))].sort().map(c => `<option value="${c}">Kelas ${c}</option>`).join(''); }
             UI.html('siswa-class-filter', classOptions); loadStudentTable();
         };
 
@@ -661,25 +775,48 @@
         };
 
         window.printQRCodes = (studentList) => {
-            let container = document.getElementById('print-area'); container.innerHTML = ''; 
+            let container = document.getElementById('print-area'); 
+            container.innerHTML = ''; 
+            
+            container.classList.remove('hidden', 'no-print');
+
             studentList.forEach(s => {
-                let card = document.createElement('div'); card.className = 'qr-card bg-white rounded-xl overflow-hidden shadow-sm';
-                card.style.border = "2px solid #0f172a"; card.style.marginBottom = "15px";
+                let card = document.createElement('div'); 
+                card.className = 'qr-card bg-white rounded-xl overflow-hidden shadow-sm';
                 
-                let header = document.createElement('div'); header.className = 'bg-slate-900 text-white p-2 font-russo text-sm uppercase'; header.innerText = appState.settings.schoolName || 'KARTU ABSENSI';
-                let body = document.createElement('div'); body.className = 'p-4 flex flex-col items-center justify-center';
-                let qrWrapper = document.createElement('div'); qrWrapper.id = `qr_${s.id}`; qrWrapper.className = 'mb-3 p-2 bg-white rounded-lg inline-block';
-                let info = document.createElement('div'); info.innerHTML = `<h3 class="font-bold text-gray-800 text-sm mb-1 leading-tight uppercase">${s.name}</h3><p class="text-xs font-mono text-gray-500">NISN: ${s.nis}</p><p class="text-xs font-bold text-emerald-600 mt-1 px-3 py-1 bg-emerald-50 rounded-full inline-block border border-emerald-200">Kelas ${s.class}</p>`;
+                let header = document.createElement('div'); 
+                header.className = 'bg-slate-900 text-white p-2 font-russo text-sm uppercase'; 
+                header.innerText = appState.settings.schoolName || 'KARTU ABSENSI';
                 
-                body.appendChild(qrWrapper); body.appendChild(info); card.appendChild(header); card.appendChild(body); container.appendChild(card);
+                let body = document.createElement('div'); 
+                body.className = 'p-4 flex flex-col items-center justify-center bg-white';
+                
+                let qrWrapper = document.createElement('div'); 
+                qrWrapper.id = `qr_${s.id}`; 
+                qrWrapper.className = 'mb-3 p-2 bg-white rounded-lg inline-block';
+                
+                let info = document.createElement('div'); 
+                info.innerHTML = `<h3 class="font-bold text-gray-800 text-sm mb-1 leading-tight uppercase">${s.name}</h3><p class="text-xs font-mono text-gray-500">NISN: ${s.nis}</p><p class="text-xs font-bold text-emerald-600 mt-1 px-3 py-1 bg-emerald-50 rounded-full inline-block border border-emerald-200">Kelas ${s.class}</p>`;
+                
+                body.appendChild(qrWrapper); 
+                body.appendChild(info); 
+                card.appendChild(header); 
+                card.appendChild(body); 
+                container.appendChild(card);
+                
                 new QRCode(qrWrapper, { text: s.id, width: 140, height: 140, colorDark : "#0f172a", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
             });
-            setTimeout(() => { window.print(); }, 800);
+
+            setTimeout(() => { 
+                window.print(); 
+                setTimeout(() => { container.classList.add('hidden', 'no-print'); }, 1000);
+            }, 800);
         };
 
         window.renderPengaturan = () => {
-            let att = appState.settings.attendance || { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [] };
+            let att = appState.settings.attendance || { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice' };
             UI.val('set-jam-masuk', att.startTime);
+            UI.val('set-sound-scan', att.scanSound || 'voice');
             [0,1,2,3,4,5,6].forEach(d => { let cb = document.getElementById(`day-${d}`); if(cb) cb.checked = att.workDays.includes(d); });
             renderHolidaysList();
         };
@@ -701,7 +838,7 @@
         window.addHoliday = () => {
             const dateVal = UI.val('new-holiday-date');
             if(!dateVal) { UI.toast("Pilih tanggal dahulu!", "error"); return; }
-            if(!appState.settings.attendance) appState.settings.attendance = { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [] };
+            if(!appState.settings.attendance) appState.settings.attendance = { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice' };
             if(!appState.settings.attendance.holidays.includes(dateVal)) { appState.settings.attendance.holidays.push(dateVal); renderHolidaysList(); UI.val('new-holiday-date', ''); } 
             else { UI.toast("Tanggal sudah ada", "error"); }
         };
@@ -715,6 +852,7 @@
         window.savePengaturan = () => {
             if(!appState.settings.attendance) appState.settings.attendance = { holidays: [] };
             appState.settings.attendance.startTime = UI.val('set-jam-masuk');
+            appState.settings.attendance.scanSound = UI.val('set-sound-scan');
             let wDays = []; [0,1,2,3,4,5,6].forEach(d => { if(document.getElementById(`day-${d}`).checked) wDays.push(d); });
             appState.settings.attendance.workDays = wDays;
             saveDataToCloud('settings'); UI.toast('Pengaturan Tersimpan!');
@@ -727,7 +865,7 @@
         <div class="loader mb-4"></div><p class="text-emerald-400 font-bold tracking-widest font-russo animate-pulse">SINKRONISASI DATABASE...</p>
     </div>
 
-    <!-- AREA CETAK TERSEMBUNYI -->
+    <!-- AREA CETAK -->
     <div id="print-area" class="hidden no-print text-center p-4"></div>
 
     <div id="login-screen" class="flex-1 flex items-center justify-center relative overflow-hidden bg-slate-900 p-4">
@@ -747,7 +885,7 @@
                 </div>
                 <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold p-4 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all font-poppins text-lg tracking-wide">MASUK APLIKASI</button>
             </form>
-            <p class="text-[10px] text-center text-gray-400 mt-6"><i class="fas fa-info-circle"></i> Gunakan akun Administrator atau Wali Kelas yang sudah terdaftar di aplikasi E-Rapot utama.</p>
+            <p class="text-[10px] text-center text-gray-400 mt-6"><i class="fas fa-info-circle"></i> Gunakan akun Administrator, Piket, atau Wali Kelas yang sudah terdaftar di E-Rapot utama.</p>
         </div>
     </div>
 
@@ -759,15 +897,13 @@
                 <button onclick="closeSidebar()" class="lg:hidden text-slate-400 hover:text-white text-xl"><i class="fas fa-times"></i></button>
             </div>
             
-            <nav id="sidebar-menu" class="flex-1 py-4 flex flex-col gap-1 overflow-y-auto">
-                <!-- Menu di-generate otomatis oleh sistem berdasarkan Peran Login -->
-            </nav>
+            <nav id="sidebar-menu" class="flex-1 py-4 flex flex-col gap-1 overflow-y-auto"></nav>
         </aside>
 
         <main class="flex-1 overflow-hidden flex flex-col w-full relative bg-slate-50">
             <header class="bg-white shadow-sm border-b h-16 flex items-center justify-between px-4 md:px-6 z-20 sticky top-0 no-print shrink-0">
                 <div class="flex items-center gap-4">
-                    <button onclick="toggleSidebar()" class="lg:hidden text-gray-600 hover:text-emerald-600 text-xl p-2 rounded-lg bg-gray-100 hover:bg-emerald-50 transition"><i class="fas fa-bars"></i></button>
+                    <button onclick="toggleSidebar()" class="text-gray-600 hover:text-emerald-600 text-xl p-2 rounded-lg bg-gray-100 hover:bg-emerald-50 transition"><i class="fas fa-bars"></i></button>
                     <span id="header-school-name" class="font-bold text-gray-800 hidden sm:block tracking-wide uppercase">Sistem Kehadiran</span>
                 </div>
                 <div class="flex items-center gap-4">
@@ -790,9 +926,14 @@
                     
                     <div class="w-full max-w-lg bg-white rounded-3xl shadow-xl border p-4 md:p-6 text-center relative mx-auto">
                         <div class="relative w-full max-w-[500px] mx-auto bg-slate-100 min-h-[300px] flex items-center justify-center rounded-2xl border-4 border-dashed border-slate-300 overflow-hidden">
-                            <div id="camera-container" class="absolute inset-0 w-full h-full">
+                            
+                            <div id="camera-wrapper" class="absolute inset-0 w-full h-full hidden relative">
                                 <div id="reader" class="absolute inset-0 w-full h-full" style="box-shadow: none;"></div>
+                                <button type="button" onclick="switchCamera()" class="absolute bottom-4 right-4 bg-slate-900/80 hover:bg-slate-800 text-white w-12 h-12 flex items-center justify-center rounded-full shadow-lg backdrop-blur-md z-30 transition-transform transform hover:scale-110 border border-slate-700" title="Balik Kamera (Depan/Belakang)">
+                                    <i class="fas fa-camera-rotate text-xl"></i>
+                                </button>
                             </div>
+
                             <div id="camera-activate-btn-container" class="absolute z-20 flex flex-col items-center justify-center w-full h-full bg-slate-100/90 backdrop-blur-sm">
                                 <button onclick="startScanner()" class="w-56 h-16 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition-transform hover:scale-105 flex items-center justify-center gap-2 text-lg"><i class="fas fa-camera"></i> Aktifkan Kamera</button>
                             </div>
@@ -859,7 +1000,7 @@
                 </div>
 
                 <div id="view-pengaturan" class="view-section hidden flex-col p-4 md:p-8 overflow-y-auto mb-10">
-                    <div class="mb-6"><h2 class="text-2xl font-bold font-russo tracking-wide text-slate-800">Pengaturan Waktu & Kalender</h2><p class="text-sm text-gray-500 mt-1">Konfigurasi ini akan mendeteksi keterlambatan otomatis & mengecualikan hari libur dari tabel rekap.</p></div>
+                    <div class="mb-6"><h2 class="text-2xl font-bold font-russo tracking-wide text-slate-800">Pengaturan Absensi</h2><p class="text-sm text-gray-500 mt-1">Sesuaikan deteksi keterlambatan, kalender libur, dan pilihan notifikasi suara.</p></div>
                     <div class="bg-white rounded-xl shadow-sm border p-6 md:p-8 max-w-4xl space-y-8">
                         <div>
                             <h3 class="font-bold text-lg text-slate-800 mb-3 border-b pb-2"><i class="fas fa-clock text-blue-500 mr-2"></i> Batas Waktu Terlambat (Jam Masuk)</h3>
@@ -867,6 +1008,22 @@
                             <input type="time" id="set-jam-masuk" class="border border-gray-300 rounded-lg p-3 w-48 text-lg font-black text-slate-700 bg-slate-50 focus:ring-2 focus:ring-emerald-500 outline-none">
                             <p class="text-xs text-gray-400 mt-2">Siswa yang men-scan kartu melewati jam ini akan otomatis disarankan sebagai status <span class="font-bold text-red-500">Terlambat</span>.</p>
                         </div>
+                        
+                        <div>
+                            <h3 class="font-bold text-lg text-slate-800 mb-3 border-b pb-2"><i class="fas fa-volume-up text-blue-500 mr-2"></i> Suara Notifikasi Scanner</h3>
+                            <div class="flex flex-col sm:flex-row gap-3">
+                                <select id="set-sound-scan" class="border border-gray-300 p-3 rounded-lg font-bold text-slate-700 bg-slate-50 flex-1 outline-none focus:ring-2 focus:ring-emerald-500">
+                                    <option value="beep">Bip Standar (Pendek)</option>
+                                    <option value="chime">Nada Ceria (Ting-Tung)</option>
+                                    <option value="bell">Nada Lonceng Halus</option>
+                                    <option value="voice">Suara Google ("Absen Berhasil")</option>
+                                    <option value="mute">Bisu (Tanpa Suara)</option>
+                                </select>
+                                <button type="button" onclick="testSound()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-6 py-3 rounded-lg font-bold transition shadow-sm border border-blue-200"><i class="fas fa-play mr-2"></i> Tes Suara Sukses</button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">Pilih <b>"Suara Google"</b> agar aplikasi bisa berbicara otomatis (Absen Berhasil, Sudah Absen, Siswa Terlambat, dll).</p>
+                        </div>
+
                         <div>
                             <h3 class="font-bold text-lg text-slate-800 mb-3 border-b pb-2"><i class="fas fa-calendar-alt text-emerald-500 mr-2"></i> Hari Sekolah Efektif</h3>
                             <p class="text-xs text-gray-500 mb-3">Centang hari di mana sekolah mewajibkan absensi (Hari tidak dicentang akan diblok warna merah di kalender).</p>
