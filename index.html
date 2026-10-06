@@ -431,16 +431,19 @@
             menuHtml += navItem('dashboard', 'fa-chart-pie', 'Dashboard Utama');
             menuHtml += navItem('profil-akun', 'fa-user-shield', 'Profil & Keamanan'); 
             menuHtml += navItem('data-siswa', 'fa-users', 'Data Siswa');
-            if (appState.user.role === 'Admin') { menuHtml += navItem('data-guru', 'fa-chalkboard-teacher', 'Data Guru (Admin)'); menuHtml += navItem('pengaturan', 'fa-cogs', 'Pengaturan Sistem'); }
             
-            menuHtml += navItem('input-nilai', 'fa-edit', 'Nilai Akademik');
-            menuHtml += navItem('nilai-keaktifan', 'fa-hand-paper', 'Nilai Keaktifan'); 
-            menuHtml += navItem('nilai-sikap', 'fa-heart', 'Penilaian Sikap'); 
-            
-            menuHtml += navItem('ambang-batas', 'fa-sliders-h', 'Nilai Ambang Batas');
-            if (appState.user.role !== 'Guru Mapel') menuHtml += navItem('rekapitulasi', 'fa-clipboard-list', 'Rekapitulasi Nilai');
-            menuHtml += navItem('deskripsi', 'fa-comment-dots', 'Master Deskripsi');
-            if (appState.user.role !== 'Guru Mapel') { menuHtml += navItem('non-akademik', 'fa-clipboard-check', 'Kehadiran & Ekstra'); menuHtml += navItem('rapot', 'fa-book-open', 'E-Rapot (PAS & PTS)'); }
+            if (appState.user.role !== 'Satpam' && appState.user.role !== 'Piket') {
+                if (appState.user.role === 'Admin') { menuHtml += navItem('data-guru', 'fa-chalkboard-teacher', 'Data Guru (Admin)'); menuHtml += navItem('pengaturan', 'fa-cogs', 'Pengaturan Sistem'); }
+                
+                menuHtml += navItem('input-nilai', 'fa-edit', 'Nilai Akademik');
+                menuHtml += navItem('nilai-keaktifan', 'fa-hand-paper', 'Nilai Keaktifan'); 
+                menuHtml += navItem('nilai-sikap', 'fa-heart', 'Penilaian Sikap'); 
+                
+                menuHtml += navItem('ambang-batas', 'fa-sliders-h', 'Nilai Ambang Batas');
+                if (appState.user.role !== 'Guru Mapel') menuHtml += navItem('rekapitulasi', 'fa-clipboard-list', 'Rekapitulasi Nilai');
+                menuHtml += navItem('deskripsi', 'fa-comment-dots', 'Master Deskripsi');
+                if (appState.user.role !== 'Guru Mapel') { menuHtml += navItem('non-akademik', 'fa-clipboard-check', 'Kehadiran & Ekstra'); menuHtml += navItem('rapot', 'fa-book-open', 'E-Rapot (PAS & PTS)'); }
+            }
             UI.html('sidebar-menu', menuHtml);
         }
 
@@ -1366,11 +1369,13 @@
             });
 
             sortedTeachers.forEach((t, i) => {
-                let badgeColor = t.role === 'Wali Kelas' ? 'bg-blue-100 text-blue-800' : (t.role === 'Guru Mapel' ? 'bg-emerald-100 text-emerald-800' : 'bg-purple-100 text-purple-800');
+                let badgeColor = t.role === 'Wali Kelas' ? 'bg-blue-100 text-blue-800' : (t.role === 'Guru Mapel' ? 'bg-emerald-100 text-emerald-800' : (t.role === 'Satpam' || t.role === 'Piket' ? 'bg-gray-100 text-gray-800' : 'bg-purple-100 text-purple-800'));
                 
                 let info = '';
-                if (t.role === 'Admin') info = 'Administrasi';
+                if (t.role === 'Admin') info = 'Administrator Sistem';
                 else if (t.role === 'Kepsek') info = 'Pimpinan Sekolah';
+                else if (t.role === 'Piket') info = 'Petugas Piket';
+                else if (t.role === 'Satpam') info = 'Petugas Keamanan';
                 else if (t.assignedClass) info = `Wali Kelas ${t.assignedClass}`;
                 else if (t.assignedSubject) info = `Guru ${t.assignedSubject}`;
                 else info = 'Belum Ditugaskan';
@@ -2273,7 +2278,7 @@
     
     <div id="add-student-modal" class="fixed inset-0 bg-black/70 z-[60] hidden flex-col items-center justify-center"><div class="bg-white rounded-2xl w-full max-w-md"><div class="bg-slate-900 text-white p-4 flex justify-between"><h3 id="add-student-modal-title" class="font-bold">Tambah</h3><button onclick="closeAddStudentModal()"><i class="fas fa-times"></i></button></div><form id="form-add-student" onsubmit="saveNewStudent(event)" class="p-6 space-y-4"><input type="text" id="new-student-name" required class="w-full border p-3" placeholder="Nama Lengkap"><input type="text" id="new-student-nis" required class="w-full border p-3" placeholder="NISN"><div class="flex gap-4"><select id="new-student-class" class="flex-1 border p-3"></select><select id="new-student-gender" class="flex-1 border p-3 font-bold text-blue-800"><option value="L">Laki-Laki (L)</option><option value="P">Perempuan (P)</option></select></div><select id="new-student-religion" class="w-full border p-3"><option>Kristen</option><option>Islam</option><option>Katolik</option><option>Hindu</option><option>Buddha</option></select><div class="flex gap-3"><button type="button" onclick="closeAddStudentModal()" class="flex-1 bg-gray-200 p-3 rounded-lg font-bold">Batal</button><button type="submit" class="flex-1 bg-blue-600 text-white p-3 rounded-lg font-bold">Simpan</button></div></form></div></div>
     
-    <div id="teacher-modal" class="fixed inset-0 bg-black/70 z-[60] hidden flex-col items-center justify-center"><div class="bg-white rounded-2xl w-full max-w-md"><div class="bg-slate-900 text-white p-4 flex justify-between"><h3 id="teacher-modal-title" class="font-bold">Tambah</h3><button onclick="closeTeacherModal()"><i class="fas fa-times"></i></button></div><form id="form-teacher" onsubmit="saveTeacher(event)" class="p-6 space-y-4"><input type="text" id="t-name" required class="w-full border p-3" placeholder="Nama & Gelar"><input type="text" id="t-nip" required class="w-full border p-3" placeholder="NIP"><div class="flex gap-4"><input type="text" id="t-username" required placeholder="Username" class="flex-1 border p-3"><select id="t-role" required onchange="toggleTeacherRoleFields()" class="flex-1 border p-3"><option value="Wali Kelas">Wali Kelas</option><option value="Guru Mapel">Guru Mapel</option><option value="Kepsek">Pimpinan</option></select></div><div id="wrap-t-class" class="hidden"><select id="t-class" class="w-full border p-3"></select></div><div id="wrap-t-subject" class="hidden"><select id="t-subject" class="w-full border p-3"></select></div><div class="flex gap-3"><button type="button" onclick="closeTeacherModal()" class="flex-1 bg-gray-200 p-3">Batal</button><button type="submit" class="flex-1 bg-blue-600 text-white p-3">Simpan</button></div></form></div></div>
+    <div id="teacher-modal" class="fixed inset-0 bg-black/70 z-[60] hidden flex-col items-center justify-center"><div class="bg-white rounded-2xl w-full max-w-md"><div class="bg-slate-900 text-white p-4 flex justify-between"><h3 id="teacher-modal-title" class="font-bold">Tambah</h3><button onclick="closeTeacherModal()"><i class="fas fa-times"></i></button></div><form id="form-teacher" onsubmit="saveTeacher(event)" class="p-6 space-y-4"><input type="text" id="t-name" required class="w-full border p-3" placeholder="Nama & Gelar"><input type="text" id="t-nip" required class="w-full border p-3" placeholder="NIP"><div class="flex gap-4"><input type="text" id="t-username" required placeholder="Username" class="flex-1 border p-3"><select id="t-role" required onchange="toggleTeacherRoleFields()" class="flex-1 border p-3"><option value="Wali Kelas">Wali Kelas</option><option value="Guru Mapel">Guru Mapel</option><option value="Kepsek">Pimpinan</option><option value="Admin">Administrator</option><option value="Piket">Petugas Piket</option><option value="Satpam">Satpam (Keamanan)</option></select></div><div id="wrap-t-class" class="hidden"><select id="t-class" class="w-full border p-3"></select></div><div id="wrap-t-subject" class="hidden"><select id="t-subject" class="w-full border p-3"></select></div><div class="flex gap-3"><button type="button" onclick="closeTeacherModal()" class="flex-1 bg-gray-200 p-3">Batal</button><button type="submit" class="flex-1 bg-blue-600 text-white p-3">Simpan</button></div></form></div></div>
 
     <!-- Login Screen -->
     <div id="login-screen" class="flex-1 flex items-center justify-center relative overflow-hidden bg-slate-900 p-4">
