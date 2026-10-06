@@ -235,11 +235,11 @@
                 <a href="#" onclick="switchView('scanner')" data-view="scanner" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition bg-emerald-800 border-l-4 border-white text-white"><i class="fas fa-camera w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Scanner Kamera</span></a>
             `;
             
-            if (role === 'Wali Kelas' || role === 'Admin' || role === 'Kepsek' || role === 'Guru Mapel') {
+            if (role === 'Wali Kelas' || role === 'Admin' || role === 'Kepsek' || role === 'Guru Mapel' || role === 'Piket' || role === 'Satpam') {
                 html += `<a href="#" onclick="switchView('manual')" data-view="manual" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-edit w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Input Manual (S/I/A)</span></a>`;
             }
             
-            if (role === 'Admin' || role === 'Kepsek' || role === 'Wali Kelas') {
+            if (role === 'Admin' || role === 'Kepsek' || role === 'Wali Kelas' || role === 'Piket') {
                 html += `
                     <a href="#" onclick="switchView('rekap')" data-view="rekap" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-calendar-check w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Rekap Kehadiran</span></a>
                     <a href="#" onclick="switchView('siswa')" data-view="siswa" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-id-card w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Data WA & Kartu</span></a>
