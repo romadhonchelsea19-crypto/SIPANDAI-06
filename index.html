@@ -153,7 +153,7 @@
         const MAPEL_WALI_KELAS = SCHOOL_DATA.subjects.filter(s => !MAPEL_BIDANG_STUDI.includes(s));
 
         window.appState = {
-            user: null, currentView: 'dashboard', students: [], teachers: [], grades: {}, descriptions: {}, thresholds: {}, sidebarOpen: false,
+            user: null, currentView: 'dashboard', students: [], teachers: [], grades: {}, descriptions: {}, thresholds: {}, sidebarOpen: false, attendance: {},
             settings: {
                 schoolName: "SD NEGERI 06 MANADO", schoolAddress: "Jl. Sarapung No 24 Kec. Wenang Utara Kota Manado", academicYear: "2026/2027", semester: "Ganjil",
                 reportTitle: "LAPORAN HASIL BELAJAR", midReportTitle: "SUMATIF LINGKUP MATERI SEMESTER GANJIL", headmasterName: "Dr. Dra. Hj. Fatimah M., M.Pd", headmasterNip: "19750817 199903 1 005", printDate: "Manado, 18 Desember 2026", midPrintDate: "Manado, 24 Oktober 2026",
@@ -229,6 +229,7 @@
                     }
 
                     appState.students = data.students || appState.students;
+                    appState.attendance = data.attendance || appState.attendance; // MENGAMBIL DATA ABSENSI HARIAN
                     if (data.teachers && data.teachers.length > 0) appState.teachers = data.teachers; else initMocks();
                     appState.descriptions = data.descriptions || appState.descriptions;
                     appState.thresholds = data.thresholds || appState.thresholds;
@@ -263,9 +264,6 @@
                         }
                     }
                 } else { 
-                    // PERBAIKAN FATAL ERROR: Jika koneksi lelet dan database terbaca kosong (tidak ada),
-                    // SISTEM TIDAK BOLEH LAGI mengirim perintah auto-save kosong ke cloud.
-                    // Cukup inisialisasi Mocks agar aplikasi tidak error di lokal.
                     initMocks(); 
                     console.warn("Menerima Snapshot kosong. Menunggu data server atau aksi pengguna...");
                 }
@@ -432,7 +430,7 @@
             menuHtml += navItem('profil-akun', 'fa-user-shield', 'Profil & Keamanan'); 
             menuHtml += navItem('data-siswa', 'fa-users', 'Data Siswa');
             
-            if (appState.user.role !== 'Satpam' && appState.user.role !== 'Piket') {
+            if (appState.user.role !== 'Satpam' && appState.user.role !== 'Petugas Piket') {
                 if (appState.user.role === 'Admin') { menuHtml += navItem('data-guru', 'fa-chalkboard-teacher', 'Data Guru (Admin)'); menuHtml += navItem('pengaturan', 'fa-cogs', 'Pengaturan Sistem'); }
                 
                 menuHtml += navItem('input-nilai', 'fa-edit', 'Nilai Akademik');
@@ -462,6 +460,22 @@
             `);
             const headerYearEl = document.getElementById('header-title-year'); if (headerYearEl) headerYearEl.innerText = `Tahun Ajaran ${appState.settings.academicYear}`;
         }
+
+        // --- SISTEM PENGHITUNG ABSENSI OTOMATIS ---
+        window.getAttendanceTotals = (sId) => {
+            let totals = { Sakit: 0, Izin: 0, Alpa: 0 };
+            if (appState.attendance) {
+                for (const dateKey in appState.attendance) {
+                    if (appState.attendance[dateKey][sId]) {
+                        const status = appState.attendance[dateKey][sId].status;
+                        if (totals[status] !== undefined) {
+                            totals[status]++;
+                        }
+                    }
+                }
+            }
+            return totals;
+        };
 
         window.getKeaktifanAvg = (sId, sub) => {
             const fields = ['bertanya', 'menjawab', 'memperhatikan', 'kerjasama', 'mencatat'];
@@ -1369,12 +1383,12 @@
             });
 
             sortedTeachers.forEach((t, i) => {
-                let badgeColor = t.role === 'Wali Kelas' ? 'bg-blue-100 text-blue-800' : (t.role === 'Guru Mapel' ? 'bg-emerald-100 text-emerald-800' : (t.role === 'Satpam' || t.role === 'Piket' ? 'bg-gray-100 text-gray-800' : 'bg-purple-100 text-purple-800'));
+                let badgeColor = t.role === 'Wali Kelas' ? 'bg-blue-100 text-blue-800' : (t.role === 'Guru Mapel' ? 'bg-emerald-100 text-emerald-800' : (t.role === 'Satpam' || t.role === 'Petugas Piket' ? 'bg-gray-100 text-gray-800' : 'bg-purple-100 text-purple-800'));
                 
                 let info = '';
                 if (t.role === 'Admin') info = 'Administrator Sistem';
                 else if (t.role === 'Kepsek') info = 'Pimpinan Sekolah';
-                else if (t.role === 'Piket') info = 'Petugas Piket';
+                else if (t.role === 'Petugas Piket') info = 'Petugas Piket';
                 else if (t.role === 'Satpam') info = 'Petugas Keamanan';
                 else if (t.assignedClass) info = `Wali Kelas ${t.assignedClass}`;
                 else if (t.assignedSubject) info = `Guru ${t.assignedSubject}`;
@@ -1892,13 +1906,15 @@
         function renderNonAkademik() {
             let classOptions = appState.user.role === 'Wali Kelas' ? `<option value="${appState.user.assignedClass}">${appState.user.assignedClass}</option>` : '<option value="">-- Pilih Kelas --</option>' + SCHOOL_DATA.classes.map(c => `<option value="${c}">${c}</option>`).join('');
             let content = `
-                <h2 class="text-2xl font-bold mb-4 font-russo tracking-wide">Kehadiran, Ekstra & Catatan</h2>
+                <h2 class="text-2xl font-bold mb-1 font-russo tracking-wide">Kehadiran, Ekstra & Catatan</h2>
+                <p class="text-sm text-gray-500 mb-4"><i class="fas fa-link text-emerald-500 mr-1"></i> Data Sakit, Izin, dan Alpa <b>terkunci dan terisi otomatis</b> dari Aplikasi Absensi Harian.</p>
+                
                 <div class="bg-white p-4 rounded-xl border mb-4"><select id="filter-class-non" onchange="loadNonAkademikTable()" class="w-1/3 border p-2 font-bold">${classOptions}</select></div>
                 <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
                     <div class="table-container overflow-x-auto w-full relative" style="max-height: 60vh;">
                         <table class="min-w-max w-full text-sm text-left border-collapse">
                             <thead class="text-xs text-white bg-slate-800 sticky-header">
-                                <tr><th rowspan="2" class="p-2 border sticky-col-header bg-slate-900 z-30">No</th><th rowspan="2" class="p-2 border sticky-col-header left-[40px] bg-slate-900 z-30">Nama Siswa</th><th colspan="3" class="p-2 border text-center bg-red-700">Ketidakhadiran</th><th colspan="2" class="p-2 border text-center bg-green-700">Ekstra 1</th><th colspan="2" class="p-2 border text-center bg-teal-700">Ekstra 2 (P5)</th><th rowspan="2" class="p-2 border text-center bg-amber-600 min-w-[200px]">Catatan</th></tr>
+                                <tr><th rowspan="2" class="p-2 border sticky-col-header bg-slate-900 z-30">No</th><th rowspan="2" class="p-2 border sticky-col-header left-[40px] bg-slate-900 z-30">Nama Siswa</th><th colspan="3" class="p-2 border text-center bg-red-700">Ketidakhadiran (Otomatis)</th><th colspan="2" class="p-2 border text-center bg-green-700">Ekstra 1</th><th colspan="2" class="p-2 border text-center bg-teal-700">Ekstra 2 (P5)</th><th rowspan="2" class="p-2 border text-center bg-amber-600 min-w-[200px]">Catatan Wali Kelas</th></tr>
                                 <tr><th class="p-1 border text-center bg-red-600">S</th><th class="p-1 border text-center bg-red-600">I</th><th class="p-1 border text-center bg-red-600">A</th><th class="p-1 border text-center bg-green-600">Nama</th><th class="p-1 border text-center bg-green-600">Ket</th><th class="p-1 border text-center bg-teal-600">Nama</th><th class="p-1 border text-center bg-teal-600">Ket</th></tr>
                             </thead>
                             <tbody id="non-akademik-table-body"></tbody>
@@ -1912,7 +1928,21 @@
             const cls = UI.val('filter-class-non'); if(!cls) return;
             let rows = ''; appState.students.filter(s => s.class === cls).forEach((s, i) => {
                 const val = (f) => appState.grades[`${s.id}_${f}`] || '';
-                rows += `<tr class="bg-white"><td class="border p-2 sticky-col bg-white z-10">${i+1}</td><td class="border p-2 sticky-col left-[40px] font-semibold bg-white z-10">${s.name}</td><td class="border p-1"><input type="number" class="w-full text-center border p-1" data-s="${s.id}" data-f="sakit" value="${val('sakit')}" oninput="saveNon(this)"></td><td class="border p-1"><input type="number" class="w-full text-center border p-1" data-s="${s.id}" data-f="izin" value="${val('izin')}" oninput="saveNon(this)"></td><td class="border p-1"><input type="number" class="w-full text-center border p-1" data-s="${s.id}" data-f="alpa" value="${val('alpa')}" oninput="saveNon(this)"></td><td class="border p-1"><input type="text" class="w-full border p-1" data-s="${s.id}" data-f="eks1_nama" value="${val('eks1_nama')}" oninput="saveNon(this)"></td><td class="border p-1"><input type="text" class="w-full border p-1" data-s="${s.id}" data-f="eks1_ket" value="${val('eks1_ket')}" oninput="saveNon(this)"></td><td class="border p-1"><input type="text" class="w-full border p-1" data-s="${s.id}" data-f="eks2_nama" value="${val('eks2_nama')}" oninput="saveNon(this)"></td><td class="border p-1"><input type="text" class="w-full border p-1" data-s="${s.id}" data-f="eks2_ket" value="${val('eks2_ket')}" oninput="saveNon(this)"></td><td class="border p-1"><textarea class="w-full border p-1 h-10" data-s="${s.id}" data-f="catatan" oninput="saveNon(this)">${val('catatan')}</textarea></td></tr>`;
+                const att = getAttendanceTotals(s.id); 
+                
+                rows += `<tr class="bg-white">
+                    <td class="border p-2 sticky-col bg-white z-10">${i+1}</td>
+                    <td class="border p-2 sticky-col left-[40px] font-semibold bg-white z-10">${s.name}</td>
+                    <td class="border p-1"><input type="number" readonly class="w-full text-center border p-1 bg-slate-100 text-slate-500 cursor-not-allowed font-bold" value="${att.Sakit}" title="Otomatis ditarik dari Absensi Harian"></td>
+                    <td class="border p-1"><input type="number" readonly class="w-full text-center border p-1 bg-slate-100 text-slate-500 cursor-not-allowed font-bold" value="${att.Izin}" title="Otomatis ditarik dari Absensi Harian"></td>
+                    <td class="border p-1"><input type="number" readonly class="w-full text-center border p-1 bg-slate-100 text-slate-500 cursor-not-allowed font-bold" value="${att.Alpa}" title="Otomatis ditarik dari Absensi Harian"></td>
+                    
+                    <td class="border p-1"><input type="text" class="w-full border p-1" data-s="${s.id}" data-f="eks1_nama" value="${val('eks1_nama')}" oninput="saveNon(this)"></td>
+                    <td class="border p-1"><input type="text" class="w-full border p-1" data-s="${s.id}" data-f="eks1_ket" value="${val('eks1_ket')}" oninput="saveNon(this)"></td>
+                    <td class="border p-1"><input type="text" class="w-full border p-1" data-s="${s.id}" data-f="eks2_nama" value="${val('eks2_nama')}" oninput="saveNon(this)"></td>
+                    <td class="border p-1"><input type="text" class="w-full border p-1" data-s="${s.id}" data-f="eks2_ket" value="${val('eks2_ket')}" oninput="saveNon(this)"></td>
+                    <td class="border p-1"><textarea class="w-full border p-1 h-10" data-s="${s.id}" data-f="catatan" oninput="saveNon(this)">${val('catatan')}</textarea></td>
+                </tr>`;
             }); UI.html('non-akademik-table-body', rows);
         };
         window.saveNon = (el) => { appState.grades[`${el.dataset.s}_${el.dataset.f}`] = el.value; saveDataToCloud('grades'); };
@@ -2001,6 +2031,8 @@
                 }
                 return v;
             };
+
+            const att = getAttendanceTotals(sId); 
             const waliData = appState.teachers.find(t => t.role === 'Wali Kelas' && t.assignedClass === cls);
             
             let tableHeader = isMid 
@@ -2083,9 +2115,9 @@
                             <td width="48%" style="vertical-align: top;">
                                 <h4 style="font-weight:bold; margin-bottom:6px; font-size:12px;">C. Ketidakhadiran</h4>
                                 <table style="width:100%; border-collapse:collapse;">
-                                    <tr><td width="70%" style="border:1px solid black; padding:5px;">Sakit</td><td width="30%" style="border:1px solid black; padding:5px; text-align:center;">${val('sakit')} hari</td></tr>
-                                    <tr><td width="70%" style="border:1px solid black; padding:5px;">Izin</td><td width="30%" style="border:1px solid black; padding:5px; text-align:center;">${val('izin')} hari</td></tr>
-                                    <tr><td width="70%" style="border:1px solid black; padding:5px;">Alpa Tanpa Keterangan</td><td width="30%" style="border:1px solid black; padding:5px; text-align:center;">${val('alpa')} hari</td></tr>
+                                    <tr><td width="70%" style="border:1px solid black; padding:5px;">Sakit</td><td width="30%" style="border:1px solid black; padding:5px; text-align:center;">${att.Sakit} hari</td></tr>
+                                    <tr><td width="70%" style="border:1px solid black; padding:5px;">Izin</td><td width="30%" style="border:1px solid black; padding:5px; text-align:center;">${att.Izin} hari</td></tr>
+                                    <tr><td width="70%" style="border:1px solid black; padding:5px;">Alpa Tanpa Keterangan</td><td width="30%" style="border:1px solid black; padding:5px; text-align:center;">${att.Alpa} hari</td></tr>
                                 </table>
                             </td>
                         </tr>
@@ -2278,7 +2310,7 @@
     
     <div id="add-student-modal" class="fixed inset-0 bg-black/70 z-[60] hidden flex-col items-center justify-center"><div class="bg-white rounded-2xl w-full max-w-md"><div class="bg-slate-900 text-white p-4 flex justify-between"><h3 id="add-student-modal-title" class="font-bold">Tambah</h3><button onclick="closeAddStudentModal()"><i class="fas fa-times"></i></button></div><form id="form-add-student" onsubmit="saveNewStudent(event)" class="p-6 space-y-4"><input type="text" id="new-student-name" required class="w-full border p-3" placeholder="Nama Lengkap"><input type="text" id="new-student-nis" required class="w-full border p-3" placeholder="NISN"><div class="flex gap-4"><select id="new-student-class" class="flex-1 border p-3"></select><select id="new-student-gender" class="flex-1 border p-3 font-bold text-blue-800"><option value="L">Laki-Laki (L)</option><option value="P">Perempuan (P)</option></select></div><select id="new-student-religion" class="w-full border p-3"><option>Kristen</option><option>Islam</option><option>Katolik</option><option>Hindu</option><option>Buddha</option></select><div class="flex gap-3"><button type="button" onclick="closeAddStudentModal()" class="flex-1 bg-gray-200 p-3 rounded-lg font-bold">Batal</button><button type="submit" class="flex-1 bg-blue-600 text-white p-3 rounded-lg font-bold">Simpan</button></div></form></div></div>
     
-    <div id="teacher-modal" class="fixed inset-0 bg-black/70 z-[60] hidden flex-col items-center justify-center"><div class="bg-white rounded-2xl w-full max-w-md"><div class="bg-slate-900 text-white p-4 flex justify-between"><h3 id="teacher-modal-title" class="font-bold">Tambah</h3><button onclick="closeTeacherModal()"><i class="fas fa-times"></i></button></div><form id="form-teacher" onsubmit="saveTeacher(event)" class="p-6 space-y-4"><input type="text" id="t-name" required class="w-full border p-3" placeholder="Nama & Gelar"><input type="text" id="t-nip" required class="w-full border p-3" placeholder="NIP"><div class="flex gap-4"><input type="text" id="t-username" required placeholder="Username" class="flex-1 border p-3"><select id="t-role" required onchange="toggleTeacherRoleFields()" class="flex-1 border p-3"><option value="Wali Kelas">Wali Kelas</option><option value="Guru Mapel">Guru Mapel</option><option value="Kepsek">Pimpinan</option><option value="Admin">Administrator</option><option value="Piket">Petugas Piket</option><option value="Satpam">Satpam (Keamanan)</option></select></div><div id="wrap-t-class" class="hidden"><select id="t-class" class="w-full border p-3"></select></div><div id="wrap-t-subject" class="hidden"><select id="t-subject" class="w-full border p-3"></select></div><div class="flex gap-3"><button type="button" onclick="closeTeacherModal()" class="flex-1 bg-gray-200 p-3">Batal</button><button type="submit" class="flex-1 bg-blue-600 text-white p-3">Simpan</button></div></form></div></div>
+    <div id="teacher-modal" class="fixed inset-0 bg-black/70 z-[60] hidden flex-col items-center justify-center"><div class="bg-white rounded-2xl w-full max-w-md"><div class="bg-slate-900 text-white p-4 flex justify-between"><h3 id="teacher-modal-title" class="font-bold">Tambah</h3><button onclick="closeTeacherModal()"><i class="fas fa-times"></i></button></div><form id="form-teacher" onsubmit="saveTeacher(event)" class="p-6 space-y-4"><input type="text" id="t-name" required class="w-full border p-3" placeholder="Nama & Gelar"><input type="text" id="t-nip" required class="w-full border p-3" placeholder="NIP"><div class="flex gap-4"><input type="text" id="t-username" required placeholder="Username" class="flex-1 border p-3"><select id="t-role" required onchange="toggleTeacherRoleFields()" class="flex-1 border p-3"><option value="Wali Kelas">Wali Kelas</option><option value="Guru Mapel">Guru Mapel</option><option value="Kepsek">Pimpinan</option><option value="Admin">Administrator</option><option value="Petugas Piket">Petugas Piket</option><option value="Satpam">Satpam (Keamanan)</option></select></div><div id="wrap-t-class" class="hidden"><select id="t-class" class="w-full border p-3"></select></div><div id="wrap-t-subject" class="hidden"><select id="t-subject" class="w-full border p-3"></select></div><div class="flex gap-3"><button type="button" onclick="closeTeacherModal()" class="flex-1 bg-gray-200 p-3">Batal</button><button type="submit" class="flex-1 bg-blue-600 text-white p-3">Simpan</button></div></form></div></div>
 
     <!-- Login Screen -->
     <div id="login-screen" class="flex-1 flex items-center justify-center relative overflow-hidden bg-slate-900 p-4">
