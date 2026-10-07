@@ -13,6 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <script>
         tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'], poppins: ['Poppins', 'sans-serif'], russo: ['Russo One', 'sans-serif'], montserrat: ['Montserrat', 'sans-serif'] } } } }
@@ -70,14 +71,42 @@
             scannedStudent: null, html5QrcodeScanner: null, currentView: 'scanner', isProcessingScan: false
         };
 
-        window.currentFacingMode = "environment"; // Default kamera belakang
+        window.currentFacingMode = "environment";
 
-        // --- PRELOAD VOICES (Agar suara Google langsung siap) ---
+        // MENGUMPULKAN SEMUA SUARA DARI MESIN HP/LAPTOP
+        window.loadVoices = () => {
+            window.availableVoices = window.speechSynthesis.getVoices();
+            if(appState.currentView === 'pengaturan') window.populateVoiceList();
+        };
+        
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.onvoiceschanged = function() {
-                window.availableVoices = window.speechSynthesis.getVoices();
-            };
+            window.speechSynthesis.onvoiceschanged = window.loadVoices;
+            setTimeout(window.loadVoices, 500);
+            setTimeout(window.loadVoices, 1500);
+            setTimeout(window.loadVoices, 3000);
         }
+
+        window.populateVoiceList = () => {
+            const select = document.getElementById('set-voice-engine');
+            if (!select) return;
+            
+            let voices = window.speechSynthesis.getVoices();
+            if(voices.length === 0) return;
+            
+            // Urutkan dan ambil yang ada bahasa Indonesianya dulu
+            let idVoices = voices.filter(v => v.lang.includes('id'));
+            if(idVoices.length === 0) idVoices = voices; 
+            
+            let currentVal = appState.settings.attendance?.voiceEngine || 'auto';
+            let html = '<option value="auto">Deteksi Otomatis (Mencari suara perempuan...)</option>';
+            
+            idVoices.forEach(v => {
+                let isSelected = currentVal === v.name ? 'selected' : '';
+                html += `<option value="${v.name}" ${isSelected}>${v.name} (${v.lang})</option>`;
+            });
+            
+            select.innerHTML = html;
+        };
 
         const UI = {
             show: (id) => document.getElementById(id)?.classList.remove('hidden'),
@@ -93,32 +122,25 @@
             playBeep: (type = 'beep', voiceText = 'Absen Berhasil') => {
                 if (type === 'mute') return;
 
-                // FITUR KECERDASAN BUATAN (SUARA NATURAL)
                 if (type === 'voice') {
                     if ('speechSynthesis' in window) {
                         window.speechSynthesis.cancel(); 
                         const msg = new SpeechSynthesisUtterance(voiceText);
                         
-                        // Mencari suara bahasa Indonesia dengan kualitas terbaik (Google/Premium)
-                        let voices = window.availableVoices || window.speechSynthesis.getVoices();
-                        let bestVoice = voices.find(v => v.lang.includes('id') && v.name.includes('Google')) || 
-                                        voices.find(v => v.lang.includes('id') && (v.name.includes('Female') || v.name.includes('Damayanti'))) ||
-                                        voices.find(v => v.lang.includes('id'));
-                        
-                        if (bestVoice) { msg.voice = bestVoice; }
-                        
+                        // RAHASIA SUARA MERDU: Jangan paksa pilih suara!
+                        // Biarkan Google Chrome memanggil Suara Online (Mbak Google) secara otomatis
                         msg.lang = 'id-ID'; 
-                        msg.rate = 0.95; // Sedikit diperlambat agar lebih jelas dan santai (tidak terburu-buru)
-                        msg.pitch = 1.0; // Nada normal (tidak cempreng seperti robot)
+                        msg.rate = 0.9;  // Tempo sedikit diperlambat agar lebih rileks dan santai
+                        msg.pitch = 1.0; // Nada normal
                         
                         window.speechSynthesis.speak(msg);
                         return;
                     } else {
-                        // Fallback jika browser tidak mendukung
                         type = voiceText.includes('Berhasil') ? 'chime' : 'error';
                     }
                 }
 
+                // Kode fallback audio bip bawaan
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const osc = ctx.createOscillator();
                 const gainNode = ctx.createGain();
@@ -164,7 +186,7 @@
                     appState.teachers = data.teachers || [];
                     
                     if (!appState.settings.schoolName) appState.settings.schoolName = "SD NEGERI 06 MANADO";
-                    if (!appState.settings.attendance) appState.settings.attendance = { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice' };
+                    if (!appState.settings.attendance) appState.settings.attendance = { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice', voiceEngine: 'auto' };
                     if (!appState.settings.loginBg) appState.settings.loginBg = "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=2000";
                     if (!appState.settings.mainLogo) appState.settings.mainLogo = "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp";
 
@@ -173,7 +195,8 @@
                     const headerSchoolEl = document.getElementById('header-school-name'); if(headerSchoolEl) headerSchoolEl.innerText = appState.settings.schoolName;
 
                     if (appState.user) {
-                        if(appState.currentView === 'rekap') loadRekapTable();
+                        if(appState.currentView === 'dashboard') { renderDashboard(); setTimeout(initDashboardCharts, 100); }
+                        else if(appState.currentView === 'rekap') loadRekapTable();
                         else if(appState.currentView === 'manual') loadManualTable();
                         else if(appState.currentView === 'siswa') loadStudentTable();
                         else if(appState.currentView === 'pengaturan') renderPengaturan();
@@ -211,11 +234,9 @@
             if (!account) { UI.toast('Username tidak terdaftar di E-Rapot!', 'error'); return; }
             if (account.password !== passIn) { UI.toast('Kata sandi salah!', 'error'); return; }
             
-            // PENDETEKSI PERAN OTOMATIS (Mencegah error jika pakai akun lama)
-            let roleStr = account.role || '';
-            if (roleStr.includes('Satpam')) account.role = 'Satpam';
-            else if (roleStr.includes('Piket')) account.role = 'Piket';
-            
+            // DETEKSI PERAN CERDAS (Toleransi kesalahan nama peran di database)
+            if (account.role === 'Admin / Piket / Satpam') account.role = 'Petugas Piket';
+
             appState.user = account;
             UI.hide('login-screen'); UI.show('app-screen'); 
             
@@ -230,27 +251,36 @@
             if (window.innerWidth < 1024) { appState.sidebarOpen = false; document.getElementById('sidebar').classList.add('-translate-x-full'); } 
             else { appState.sidebarOpen = true; document.getElementById('sidebar').classList.remove('-translate-x-full'); }
             
-            switchView('scanner');
+            if (account.role === 'Guru Mapel') {
+                switchView('scanner');
+            } else {
+                switchView('dashboard');
+            }
+            
             UI.toast(`Selamat bertugas, ${account.name}`);
         };
 
         function renderSidebar() {
             let role = appState.user.role;
-            let html = `
-                <a href="#" onclick="switchView('scanner')" data-view="scanner" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition bg-emerald-800 border-l-4 border-white text-white"><i class="fas fa-camera w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Scanner Kamera</span></a>
-            `;
-            
-            if (role === 'Wali Kelas' || role === 'Admin' || role === 'Kepsek' || role === 'Guru Mapel' || role === 'Piket' || role === 'Satpam') {
-                html += `<a href="#" onclick="switchView('manual')" data-view="manual" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-edit w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Input Manual (S/I/A)</span></a>`;
+            let html = '';
+
+            // DASBOR, REKAP, & SISWA: Terbuka untuk semua KECUALI Guru Mapel
+            if (role !== 'Guru Mapel') {
+                html += `<a href="#" onclick="switchView('dashboard')" data-view="dashboard" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-chart-pie w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Dasbor Real-Time</span></a>`;
             }
+
+            // SCANNER & INPUT MANUAL: Terbuka untuk SEMUA
+            html += `<a href="#" onclick="switchView('scanner')" data-view="scanner" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-camera w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Scanner Kamera</span></a>`;
+            html += `<a href="#" onclick="switchView('manual')" data-view="manual" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-edit w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Input Manual (S/I/A dll)</span></a>`;
             
-            if (role === 'Admin' || role === 'Kepsek' || role === 'Wali Kelas' || role === 'Piket') {
+            if (role !== 'Guru Mapel') {
                 html += `
                     <a href="#" onclick="switchView('rekap')" data-view="rekap" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-calendar-check w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Rekap Kehadiran</span></a>
                     <a href="#" onclick="switchView('siswa')" data-view="siswa" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-id-card w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Data WA & Kartu</span></a>
                 `;
             }
             
+            // PENGATURAN: KHUSUS Admin dan Kepsek
             if (role === 'Admin' || role === 'Kepsek') {
                 html += `<a href="#" onclick="switchView('pengaturan')" data-view="pengaturan" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-cogs w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Pengaturan Absensi</span></a>`;
             }
@@ -267,6 +297,8 @@
                     appState.html5QrcodeScanner.clear(); appState.html5QrcodeScanner = null;
                 }).catch(err => { appState.html5QrcodeScanner = null; }); 
             }
+            if(window.chartInstance1) window.chartInstance1.destroy();
+            if(window.chartInstance2) window.chartInstance2.destroy();
             
             UI.hide('camera-wrapper'); UI.show('camera-activate-btn-container'); UI.hide('scanner-idle'); UI.hide('scanner-action');
             
@@ -292,26 +324,20 @@
             });
             UI.show(`view-${viewName}`);
             
-            // PENTING: Jika bukan di menu kamera, matikan kamera sepenuhnya & hapus instance-nya
             if (viewName !== 'scanner' && appState.html5QrcodeScanner) {
                 appState.html5QrcodeScanner.stop().then(() => {
-                    appState.html5QrcodeScanner.clear(); 
-                    appState.html5QrcodeScanner = null; 
-                    
-                    // Kembalikan ke tampilan awal "Tombol Aktifkan Kamera"
-                    UI.hide('camera-wrapper');
-                    UI.show('camera-activate-btn-container'); 
-                    UI.hide('scanner-idle'); 
-                    UI.hide('scanner-action');
+                    appState.html5QrcodeScanner.clear(); appState.html5QrcodeScanner = null; 
+                    UI.hide('camera-wrapper'); UI.show('camera-activate-btn-container'); 
+                    UI.hide('scanner-idle'); UI.hide('scanner-action');
                     document.getElementById('reader').innerHTML = ''; 
                 }).catch(err => { 
                     appState.html5QrcodeScanner = null; 
-                    UI.hide('camera-wrapper');
-                    UI.show('camera-activate-btn-container'); 
+                    UI.hide('camera-wrapper'); UI.show('camera-activate-btn-container'); 
                     document.getElementById('reader').innerHTML = '';
                 });
             }
 
+            if (viewName === 'dashboard') { renderDashboard(); setTimeout(initDashboardCharts, 100); }
             if (viewName === 'scanner') renderScanner();
             if (viewName === 'manual') renderManual();
             if (viewName === 'rekap') renderRekapitulasi();
@@ -320,6 +346,215 @@
             
             closeSidebar();
         }
+
+        // ==============================
+        // FITUR DASHBOARD REAL-TIME
+        // ==============================
+        function renderDashboard() {
+            let infoDesc = appState.user.role === 'Wali Kelas' ? `Pantauan Kelas ${appState.user.assignedClass}` : 'Pantauan Seluruh Sekolah';
+            let content = `
+                <div class="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl md:text-3xl font-black text-slate-800 font-russo tracking-wide">Dasbor Kehadiran <span class="text-emerald-500">Hari Ini</span></h2>
+                        <p class="text-gray-500 font-bold tracking-wide text-sm mt-1 uppercase"><i class="fas fa-globe text-blue-500 mr-1"></i> ${infoDesc}</p>
+                    </div>
+                    <button onclick="initDashboardCharts()" class="bg-white border border-gray-200 text-gray-600 hover:text-emerald-600 hover:border-emerald-300 px-4 py-2 rounded-lg font-bold shadow-sm transition"><i class="fas fa-sync-alt mr-2"></i> Segarkan Data</button>
+                </div>
+
+                <!-- Kartu Atas -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-l-4 border-l-blue-500 flex flex-col justify-center relative overflow-hidden group">
+                        <div class="absolute -right-6 -top-6 text-blue-50 opacity-50 group-hover:scale-110 transition-transform"><i class="fas fa-users text-9xl"></i></div>
+                        <h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2 relative z-10">Total Siswa</h3>
+                        <div class="text-4xl font-black text-slate-800 relative z-10" id="dash-tot-siswa">0</div>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-l-4 border-l-emerald-500 flex flex-col justify-center relative overflow-hidden group">
+                        <div class="absolute -right-6 -top-6 text-emerald-50 opacity-50 group-hover:scale-110 transition-transform"><i class="fas fa-check-circle text-9xl"></i></div>
+                        <h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2 relative z-10">Hadir Tepat Waktu</h3>
+                        <div class="text-4xl font-black text-emerald-600 relative z-10" id="dash-tot-hadir">0 <span class="text-sm font-bold text-gray-400" id="dash-pct-hadir">(0%)</span></div>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-l-4 border-l-yellow-500 flex flex-col justify-center relative overflow-hidden group">
+                        <div class="absolute -right-6 -top-6 text-yellow-50 opacity-50 group-hover:scale-110 transition-transform"><i class="fas fa-clock text-9xl"></i></div>
+                        <h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2 relative z-10">Terlambat Datang</h3>
+                        <div class="text-4xl font-black text-yellow-600 relative z-10" id="dash-tot-telat">0 <span class="text-sm font-bold text-gray-400" id="dash-pct-telat">(0%)</span></div>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-l-4 border-l-red-500 flex flex-col justify-center relative overflow-hidden group">
+                        <div class="absolute -right-6 -top-6 text-red-50 opacity-50 group-hover:scale-110 transition-transform"><i class="fas fa-user-times text-9xl"></i></div>
+                        <h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2 relative z-10">Belum Absen / S / I / A</h3>
+                        <div class="text-4xl font-black text-red-600 relative z-10" id="dash-tot-belum">0</div>
+                    </div>
+                </div>
+
+                <!-- Baris Grafik -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border">
+                        <h3 class="text-slate-800 text-sm font-bold uppercase tracking-wider mb-4 border-b pb-2"><i class="fas fa-chart-line text-blue-500 mr-2"></i> Tren Kehadiran Sekolah (7 Hari Terakhir)</h3>
+                        <div class="relative h-64 w-full"><canvas id="dashAbsenChart1"></canvas></div>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border">
+                        <h3 class="text-slate-800 text-sm font-bold uppercase tracking-wider mb-4 border-b pb-2" id="title-chart-2"><i class="fas fa-chart-bar text-emerald-500 mr-2"></i> Persentase Hadir Per Kelas (Hari Ini)</h3>
+                        <div class="relative h-64 w-full"><canvas id="dashAbsenChart2"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- Baris Tabel Bawah -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+                    <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col">
+                        <div class="p-4 bg-yellow-50 border-b border-yellow-100 flex items-center justify-between">
+                            <h3 class="font-bold text-yellow-800 uppercase tracking-wide text-sm"><i class="fas fa-exclamation-triangle mr-2"></i> Sering Terlambat (Top 5)</h3>
+                            <span class="text-[10px] bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full font-bold">Sepanjang Waktu</span>
+                        </div>
+                        <div class="p-0 overflow-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-slate-50 text-slate-500 text-xs"><tr><th class="p-3">Peringkat</th><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Kelas</th><th class="p-3 text-center">Total Telat</th></tr></thead>
+                                <tbody id="dash-table-telat" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col">
+                        <div class="p-4 bg-red-50 border-b border-red-100 flex items-center justify-between">
+                            <h3 class="font-bold text-red-800 uppercase tracking-wide text-sm"><i class="fas fa-user-clock mr-2"></i> Belum Melakukan Absensi Hari Ini</h3>
+                            <span class="text-[10px] bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold" id="dash-badge-belum">0 Siswa</span>
+                        </div>
+                        <div class="p-0 overflow-auto max-h-64">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm"><tr><th class="p-3 w-10 text-center">No</th><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Kelas</th></tr></thead>
+                                <tbody id="dash-table-belum" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+            UI.html('view-dashboard', content);
+        }
+
+        window.initDashboardCharts = () => {
+            if (!appState.user || !appState.attendance) return;
+            const isWali = appState.user.role === 'Wali Kelas';
+            let targetStds = appState.students;
+            if (isWali) targetStds = appState.students.filter(s => s.class === appState.user.assignedClass);
+            
+            let tzoffset = (new Date()).getTimezoneOffset() * 60000; 
+            const todayKey = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
+
+            let countHadir = 0, countTelat = 0, countSIA = 0, belumAbsenList = [];
+            
+            targetStds.forEach(s => {
+                if(appState.attendance[todayKey] && appState.attendance[todayKey][s.id]) {
+                    const stat = appState.attendance[todayKey][s.id].status;
+                    if(stat === 'Hadir') countHadir++;
+                    else if(stat === 'Terlambat') countTelat++;
+                    else countSIA++;
+                } else {
+                    belumAbsenList.push(s);
+                }
+            });
+
+            const totalStds = targetStds.length;
+            document.getElementById('dash-tot-siswa').innerText = totalStds;
+            document.getElementById('dash-tot-hadir').innerHTML = `${countHadir} <span class="text-sm font-bold text-gray-400">(${totalStds>0?Math.round((countHadir/totalStds)*100):0}%)</span>`;
+            document.getElementById('dash-tot-telat').innerHTML = `${countTelat} <span class="text-sm font-bold text-gray-400">(${totalStds>0?Math.round((countTelat/totalStds)*100):0}%)</span>`;
+            document.getElementById('dash-tot-belum').innerText = countSIA + belumAbsenList.length;
+
+            // Render Daftar Belum Absen
+            let htmlBelum = '';
+            belumAbsenList.sort((a,b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name)).forEach((s, i) => {
+                htmlBelum += `<tr class="hover:bg-slate-50"><td class="p-3 text-center text-gray-500 font-bold">${i+1}</td><td class="p-3 font-semibold text-gray-700">${s.name}</td><td class="p-3 text-center"><span class="bg-gray-100 border px-2 py-1 rounded text-xs font-bold">${s.class}</span></td></tr>`;
+            });
+            if(htmlBelum === '') htmlBelum = `<tr><td colspan="3" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50"><i class="fas fa-check-circle mr-2"></i>Semua siswa sudah diabsen!</td></tr>`;
+            document.getElementById('dash-table-belum').innerHTML = htmlBelum;
+            document.getElementById('dash-badge-belum').innerText = `${belumAbsenList.length} Siswa`;
+
+            // Top Terlambat
+            let telatDict = {};
+            for(let date in appState.attendance) {
+                for(let sId in appState.attendance[date]) {
+                    if(appState.attendance[date][sId].status === 'Terlambat') {
+                        if(!telatDict[sId]) telatDict[sId] = 0;
+                        telatDict[sId]++;
+                    }
+                }
+            }
+            let telatArr = [];
+            targetStds.forEach(s => { if(telatDict[s.id]) telatArr.push({ name: s.name, class: s.class, count: telatDict[s.id] }); });
+            telatArr.sort((a,b) => b.count - a.count);
+            
+            let htmlTelat = '';
+            telatArr.slice(0, 5).forEach((t, i) => {
+                let badgeClass = i === 0 ? 'bg-red-100 text-red-700 border-red-200' : 'bg-orange-100 text-orange-700 border-orange-200';
+                htmlTelat += `<tr class="hover:bg-yellow-50"><td class="p-3 font-black text-slate-400 text-center text-lg">#${i+1}</td><td class="p-3 font-bold text-gray-800">${t.name}</td><td class="p-3 text-center"><span class="bg-gray-100 border px-2 py-1 rounded text-xs font-bold">${t.class}</span></td><td class="p-3 text-center"><span class="border px-3 py-1 rounded-full text-xs font-black ${badgeClass}">${t.count}x Telat</span></td></tr>`;
+            });
+            if(htmlTelat === '') htmlTelat = `<tr><td colspan="4" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50"><i class="fas fa-smile mr-2"></i>Belum ada riwayat keterlambatan.</td></tr>`;
+            document.getElementById('dash-table-telat').innerHTML = htmlTelat;
+
+            // GRAFIK 1: Tren 7 Hari Terakhir
+            let labels7Days = []; let dataHadir7Days = [];
+            let current = new Date(Date.now() - tzoffset);
+            for(let i=6; i>=0; i--) {
+                let d = new Date(current); d.setDate(d.getDate() - i);
+                let dKey = d.toISOString().split('T')[0];
+                let dayName = d.toLocaleDateString('id-ID', { weekday: 'short' });
+                labels7Days.push(`${dayName} (${d.getDate()})`);
+
+                let hCount = 0; let totalTarget = targetStds.length;
+                if(appState.attendance[dKey]) {
+                    targetStds.forEach(s => {
+                        if(appState.attendance[dKey][s.id]) {
+                            let st = appState.attendance[dKey][s.id].status;
+                            if(st === 'Hadir' || st === 'Terlambat') hCount++;
+                        }
+                    });
+                }
+                dataHadir7Days.push(totalTarget > 0 ? Math.round((hCount/totalTarget)*100) : 0);
+            }
+
+            if(window.chartInstance1) window.chartInstance1.destroy();
+            const ctx1 = document.getElementById('dashAbsenChart1');
+            if(ctx1) {
+                window.chartInstance1 = new Chart(ctx1, {
+                    type: 'line',
+                    data: { labels: labels7Days, datasets: [{ label: '% Kehadiran', data: dataHadir7Days, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.2)', borderWidth: 3, tension: 0.4, fill: true, pointBackgroundColor: '#ffffff', pointBorderColor: '#3b82f6', pointBorderWidth: 2, pointRadius: 4 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, ticks: { callback: function(value){ return value + '%' } } } } }
+                });
+            }
+
+            // GRAFIK 2: Kehadiran Per Kelas atau Distribusi Status (Jika Wali Kelas)
+            if(window.chartInstance2) window.chartInstance2.destroy();
+            const ctx2 = document.getElementById('dashAbsenChart2');
+            
+            if(isWali && ctx2) {
+                document.getElementById('title-chart-2').innerHTML = `<i class="fas fa-chart-pie text-emerald-500 mr-2"></i> Distribusi Status Hari Ini`;
+                window.chartInstance2 = new Chart(ctx2, {
+                    type: 'doughnut',
+                    data: { labels: ['Hadir Tepat', 'Terlambat', 'Sakit/Izin/Alpa', 'Belum Absen'], datasets: [{ data: [countHadir, countTelat, countSIA, belumAbsenList.length], backgroundColor: ['#10b981', '#eab308', '#ef4444', '#cbd5e1'], borderWidth: 0 }] },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'right' } } }
+                });
+            } else if (ctx2) {
+                let classLabels = [...new Set(targetStds.map(s => s.class))].sort();
+                let classData = [];
+                classLabels.forEach(c => {
+                    let stdsInClass = targetStds.filter(s => s.class === c);
+                    let hInClass = 0;
+                    if(appState.attendance[todayKey]) {
+                        stdsInClass.forEach(s => {
+                            if(appState.attendance[todayKey][s.id]) {
+                                let st = appState.attendance[todayKey][s.id].status;
+                                if(st === 'Hadir' || st === 'Terlambat') hInClass++;
+                            }
+                        });
+                    }
+                    classData.push(stdsInClass.length > 0 ? Math.round((hInClass/stdsInClass.length)*100) : 0);
+                });
+
+                window.chartInstance2 = new Chart(ctx2, {
+                    type: 'bar',
+                    data: { labels: classLabels, datasets: [{ label: '% Hadir', data: classData, backgroundColor: '#10b981', borderRadius: 4 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, ticks: { callback: function(value){ return value + '%' } } } } }
+                });
+            }
+        };
+
+        // ==============================
 
         function renderScanner() {
             let today = new Date();
@@ -351,12 +586,9 @@
             const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
             
             appState.html5QrcodeScanner.start({ facingMode: window.currentFacingMode }, config, (decodedText) => {
-                // GEMBOK ANTI SCAN-ABU ABU: Jika sedang memproses 1 siswa, tolak kartu lain, jangan matikan kamera!
                 if (window.isProcessingScan) return; 
-                
-                window.isProcessingScan = true; // Kunci gembok
+                window.isProcessingScan = true; 
                 processScan(decodedText);
-                
             }, (errorMessage) => { }).catch((err) => {
                 UI.toast("Gagal mengakses kamera. Pastikan izin kamera aktif.", "error");
                 UI.show('camera-activate-btn-container'); UI.hide('camera-wrapper'); UI.hide('scanner-idle');
@@ -367,15 +599,11 @@
             if (appState.html5QrcodeScanner) {
                 appState.html5QrcodeScanner.stop().then(() => {
                     window.currentFacingMode = window.currentFacingMode === "environment" ? "user" : "environment";
-                    appState.html5QrcodeScanner.clear();
-                    appState.html5QrcodeScanner = null;
+                    appState.html5QrcodeScanner.clear(); appState.html5QrcodeScanner = null;
                     document.getElementById('reader').innerHTML = '';
                     setTimeout(() => { window.startScanner(); }, 200);
                     UI.toast(window.currentFacingMode === "user" ? "Beralih ke Kamera Depan" : "Beralih ke Kamera Belakang", "success");
-                }).catch(err => {
-                    console.error("Gagal mengganti kamera", err);
-                    UI.toast("Gagal menukar kamera", "error");
-                });
+                }).catch(err => { UI.toast("Gagal menukar kamera", "error"); });
             }
         };
 
@@ -386,14 +614,13 @@
             if (!student) { 
                 UI.toast("QR Code Tidak Dikenali!", "error"); 
                 UI.playBeep(userSound === 'voice' ? 'voice' : 'error', 'Tidak Dikenali'); 
-                // Buka gembok setelah 2 detik agar bisa scan kartu lain
+                
                 setTimeout(() => { window.isProcessingScan = false; }, 2000); 
                 return; 
             }
 
             appState.scannedStudent = student;
             
-            // CEK ANTI-DOUBLE SCAN
             let tzoffset = (new Date()).getTimezoneOffset() * 60000; 
             const todayKey = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
             
@@ -413,7 +640,6 @@
                 `);
                 UI.show('scanner-action');
                 
-                // Jika iseng scan 2 kali, tampilkan info selama 2 detik lalu reset otomatis
                 setTimeout(() => { resumeAfterSave(); }, 2000);
                 return; 
             }
@@ -443,7 +669,6 @@
             UI.hide('scanner-idle');
             
             if (status === 'Terlambat') {
-                // JIKA TERLAMBAT: Berhenti & Munculkan Tombol WA
                 UI.playBeep(userSound === 'voice' ? 'voice' : 'error', 'Siswa Terlambat'); 
 
                 let phone = student.parentPhone || ''; if (phone.startsWith('0')) phone = '62' + phone.substring(1);
@@ -467,7 +692,6 @@
                 `);
                 UI.show('scanner-action');
             } else {
-                // JIKA HADIR (TEPAT WAKTU): Mode Super Kilat, tidak ada tombol WA
                 UI.playBeep(userSound, 'Absen Berhasil'); 
 
                 UI.html('scanner-action', `
@@ -480,17 +704,15 @@
                 `);
                 UI.show('scanner-action');
                 
-                // JEDA KILAT 1.5 DETIK lalu siap scan siswa di belakangnya
                 setTimeout(() => { resumeAfterSave(); }, 1500);
             }
         };
 
-        // Fungsi Membersihkan Layar & Membuka Gembok Kamera
         window.resumeAfterSave = () => {
             appState.scannedStudent = null;
             UI.hide('scanner-action'); 
             UI.show('scanner-idle');
-            window.isProcessingScan = false; // Buka gembok agar bisa baca kartu baru
+            window.isProcessingScan = false;
         };
 
         window.renderManual = () => {
@@ -506,8 +728,8 @@
 
             let html = `
                 <div class="mb-6">
-                    <h2 class="text-2xl font-bold font-russo tracking-wide text-slate-800">Input Manual (Sakit/Izin/Alpa)</h2>
-                    <p class="text-sm text-gray-500 mt-1">Gunakan menu ini untuk siswa yang membawa surat izin/sakit atau tidak masuk.</p>
+                    <h2 class="text-2xl font-bold font-russo tracking-wide text-slate-800">Input Manual (Hadir/Telat/S/I/A)</h2>
+                    <p class="text-sm text-gray-500 mt-1">Gunakan menu ini untuk siswa yang tidak bawa kartu, atau tidak masuk.</p>
                 </div>
                 
                 <div class="bg-white p-4 rounded-xl shadow-sm border mb-4 flex flex-col sm:flex-row gap-4">
@@ -561,15 +783,16 @@
                     else if(type === 'Izin') specificClass = isActive ? 'bg-orange-500 text-white shadow-md ring-2 ring-orange-300' : 'bg-white text-orange-600 border border-orange-200 hover:bg-orange-50';
                     else if(type === 'Alpa') specificClass = isActive ? 'bg-red-500 text-white shadow-md ring-2 ring-red-300' : 'bg-white text-red-600 border border-red-200 hover:bg-red-50';
                     else if(type === 'Hadir') specificClass = isActive ? 'bg-emerald-500 text-white shadow-md ring-2 ring-emerald-300' : 'bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-50';
+                    else if(type === 'Terlambat') specificClass = isActive ? 'bg-yellow-500 text-white shadow-md ring-2 ring-yellow-300' : 'bg-white text-yellow-600 border border-yellow-200 hover:bg-yellow-50';
 
-                    return `<button onclick="setManual('${s.id}', '${type}')" class="px-4 py-2 rounded-lg font-bold text-xs transition ${specificClass}"><i class="fas ${icon} mr-1"></i>${label}</button>`;
+                    return `<button onclick="setManual('${s.id}', '${type}')" class="px-3 py-2 rounded-lg font-bold text-xs transition ${specificClass}"><i class="fas ${icon} mr-1"></i>${label}</button>`;
                 };
                 
                 tbody += `
                     <tr class="hover:bg-slate-50">
                         <td class="p-4 text-center font-bold text-gray-500">${i+1}</td>
                         <td class="p-4"><div class="font-bold text-gray-800">${s.name}</div><div class="font-mono text-xs text-gray-500">${s.nis}</div></td>
-                        <td class="p-4 text-center"><div class="flex flex-wrap justify-center gap-2">${btn('Hadir', 'emerald', 'Hadir', 'fa-check-circle')}${btn('Sakit', 'blue', 'Sakit', 'fa-procedures')}${btn('Izin', 'orange', 'Izin', 'fa-envelope-open-text')}${btn('Alpa', 'red', 'Alpa', 'fa-user-times')}<button onclick="setManual('${s.id}', 'Hapus')" class="px-4 py-2 rounded-lg font-bold text-xs bg-gray-100 text-gray-500 hover:bg-gray-200 ml-2 border"><i class="fas fa-eraser mr-1"></i>Kosongkan</button></div></td>
+                        <td class="p-4 text-center"><div class="flex flex-wrap justify-center gap-1.5">${btn('Hadir', 'emerald', 'Hadir', 'fa-check-circle')}${btn('Terlambat', 'yellow', 'Telat', 'fa-clock')}${btn('Sakit', 'blue', 'Sakit', 'fa-procedures')}${btn('Izin', 'orange', 'Izin', 'fa-envelope-open-text')}${btn('Alpa', 'red', 'Alpa', 'fa-user-times')}<button onclick="setManual('${s.id}', 'Hapus')" class="px-3 py-2 rounded-lg font-bold text-xs bg-gray-100 text-gray-500 hover:bg-gray-200 ml-1 border" title="Hapus Status"><i class="fas fa-eraser"></i></button></div></td>
                     </tr>
                 `;
             });
@@ -588,6 +811,7 @@
             }
             
             saveDataToCloud('attendance'); loadManualTable(); UI.toast('Status diperbarui!');
+            if (appState.currentView === 'dashboard') initDashboardCharts();
         };
 
         window.renderRekapitulasi = () => {
@@ -599,10 +823,8 @@
             let dateKeys = Object.keys(appState.attendance || {});
             let monthYears = new Set();
             
-            // Masukkan bulan dari data yang sudah ada
             dateKeys.forEach(k => { monthYears.add(k.substring(0, 7)); }); 
             
-            // FITUR BARU: Tambahkan 6 bulan terakhir agar list "Lebih Lengkap" otomatis
             let now = new Date();
             for(let i=0; i<6; i++) {
                 let d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -616,11 +838,9 @@
             
             Array.from(monthYears).sort().reverse().forEach(my => {
                 let [y, m] = my.split('-');
-                
-                // PERBAIKAN BUG: Format tanggal sekarang otomatis sudah bersih tanpa tahun ganda
-                let monthNameAndYear = new Date(y, parseInt(m)-1, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-                
-                monthOpts += `<option value="${my}" ${my === todayMY ? 'selected' : ''}>${monthNameAndYear}</option>`;
+                let monthName = new Date(y, parseInt(m)-1, 1).toLocaleDateString('id-ID', { month: 'long' });
+                // PERBAIKAN: Menghapus tahun ganda
+                monthOpts += `<option value="${my}" ${my === todayMY ? 'selected' : ''}>${monthName} ${y}</option>`;
             });
 
             UI.html('rekap-class-filter', classOptions); UI.html('rekap-month-filter', monthOpts); loadRekapTable();
@@ -819,11 +1039,12 @@
         };
 
         window.renderPengaturan = () => {
-            let att = appState.settings.attendance || { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice' };
+            let att = appState.settings.attendance || { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice', voiceEngine: 'auto' };
             UI.val('set-jam-masuk', att.startTime);
             UI.val('set-sound-scan', att.scanSound || 'voice');
             [0,1,2,3,4,5,6].forEach(d => { let cb = document.getElementById(`day-${d}`); if(cb) cb.checked = att.workDays.includes(d); });
             renderHolidaysList();
+            window.populateVoiceList();
         };
 
         window.renderHolidaysList = () => {
@@ -843,7 +1064,7 @@
         window.addHoliday = () => {
             const dateVal = UI.val('new-holiday-date');
             if(!dateVal) { UI.toast("Pilih tanggal dahulu!", "error"); return; }
-            if(!appState.settings.attendance) appState.settings.attendance = { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice' };
+            if(!appState.settings.attendance) appState.settings.attendance = { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice', voiceEngine: 'auto' };
             if(!appState.settings.attendance.holidays.includes(dateVal)) { appState.settings.attendance.holidays.push(dateVal); renderHolidaysList(); UI.val('new-holiday-date', ''); } 
             else { UI.toast("Tanggal sudah ada", "error"); }
         };
@@ -858,6 +1079,7 @@
             if(!appState.settings.attendance) appState.settings.attendance = { holidays: [] };
             appState.settings.attendance.startTime = UI.val('set-jam-masuk');
             appState.settings.attendance.scanSound = UI.val('set-sound-scan');
+            appState.settings.attendance.voiceEngine = UI.val('set-voice-engine');
             let wDays = []; [0,1,2,3,4,5,6].forEach(d => { if(document.getElementById(`day-${d}`).checked) wDays.push(d); });
             appState.settings.attendance.workDays = wDays;
             saveDataToCloud('settings'); UI.toast('Pengaturan Tersimpan!');
@@ -922,7 +1144,9 @@
 
             <div class="flex-1 overflow-y-auto relative h-full">
 
-                <div id="view-scanner" class="view-section h-full flex flex-col p-4 md:p-8 relative justify-center items-center">
+                <div id="view-dashboard" class="view-section flex-col p-4 md:p-8 relative"></div>
+
+                <div id="view-scanner" class="view-section hidden h-full flex flex-col p-4 md:p-8 relative justify-center items-center">
                     <div class="text-center w-full max-w-lg mb-6">
                         <h2 class="text-lg md:text-xl font-bold text-slate-500 uppercase tracking-widest mb-1" id="scanner-date">Memuat...</h2>
                         <div id="scanner-time" class="text-5xl md:text-6xl font-black text-emerald-600 font-russo tracking-widest drop-shadow-md mb-3">00:00:00</div>
@@ -1015,18 +1239,26 @@
                         </div>
                         
                         <div>
-                            <h3 class="font-bold text-lg text-slate-800 mb-3 border-b pb-2"><i class="fas fa-volume-up text-blue-500 mr-2"></i> Suara Notifikasi Scanner</h3>
-                            <div class="flex flex-col sm:flex-row gap-3">
+                            <h3 class="font-bold text-lg text-slate-800 mb-3 border-b pb-2"><i class="fas fa-volume-up text-blue-500 mr-2"></i> Tipe Suara Notifikasi</h3>
+                            <div class="flex flex-col sm:flex-row gap-3 mb-4">
                                 <select id="set-sound-scan" class="border border-gray-300 p-3 rounded-lg font-bold text-slate-700 bg-slate-50 flex-1 outline-none focus:ring-2 focus:ring-emerald-500">
+                                    <option value="voice">Suara Berbicara ("Absen Berhasil")</option>
                                     <option value="beep">Bip Standar (Pendek)</option>
                                     <option value="chime">Nada Ceria (Ting-Tung)</option>
                                     <option value="bell">Nada Lonceng Halus</option>
-                                    <option value="voice">Suara Google ("Absen Berhasil")</option>
                                     <option value="mute">Bisu (Tanpa Suara)</option>
                                 </select>
                                 <button type="button" onclick="testSound()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-6 py-3 rounded-lg font-bold transition shadow-sm border border-blue-200"><i class="fas fa-play mr-2"></i> Tes Suara Sukses</button>
                             </div>
-                            <p class="text-xs text-gray-500 mt-2">Pilih <b>"Suara Google"</b> agar aplikasi bisa berbicara otomatis (Absen Berhasil, Sudah Absen, Siswa Terlambat, dll).</p>
+                            
+                            <!-- BAGIAN BARU: PEMILIH MESIN SUARA -->
+                            <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl">
+                                <label class="block text-xs font-bold text-blue-800 mb-2 uppercase tracking-wide"><i class="fas fa-robot mr-1"></i> Pilih Manual Mesin Suara (Jika Suaranya Jadi Laki-laki)</label>
+                                <p class="text-[11px] text-blue-600 mb-3">Daftar di bawah ini adalah semua suara yang ada di HP/Laptop Anda. Pilih yang ada kata <b>"Female"</b>, <b>"Damayanti"</b>, <b>"Gadis"</b>, atau <b>"Google"</b> agar suaranya merdu.</p>
+                                <select id="set-voice-engine" onchange="testSound()" class="border border-blue-200 p-2.5 rounded-lg font-bold text-blue-900 bg-white w-full outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="auto">Deteksi Otomatis (Mencari suara perempuan...)</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div>
