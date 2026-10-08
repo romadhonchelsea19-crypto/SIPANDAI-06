@@ -56,7 +56,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // TAMBAHAN: Import updateDoc dan deleteField untuk Atomic Update (Pemusnah Data)
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const appId = 'sipandai-06-36543'; 
         const firebaseConfig = { apiKey: "AIzaSyAxXMEiorBbQoJO2YqW4TWdNm33X0lNsjY", authDomain: "sipandai-06-36543.firebaseapp.com", projectId: "sipandai-06-36543", storageBucket: "sipandai-06-36543.firebasestorage.app", messagingSenderId: "760127633818", appId: "1:760127633818:web:1ae67b75927bc1ed45e223" };
@@ -72,41 +73,6 @@
         };
 
         window.currentFacingMode = "environment";
-
-        // MENGUMPULKAN SEMUA SUARA DARI MESIN HP/LAPTOP
-        window.loadVoices = () => {
-            window.availableVoices = window.speechSynthesis.getVoices();
-            if(appState.currentView === 'pengaturan') window.populateVoiceList();
-        };
-        
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.onvoiceschanged = window.loadVoices;
-            setTimeout(window.loadVoices, 500);
-            setTimeout(window.loadVoices, 1500);
-            setTimeout(window.loadVoices, 3000);
-        }
-
-        window.populateVoiceList = () => {
-            const select = document.getElementById('set-voice-engine');
-            if (!select) return;
-            
-            let voices = window.speechSynthesis.getVoices();
-            if(voices.length === 0) return;
-            
-            // Urutkan dan ambil yang ada bahasa Indonesianya dulu
-            let idVoices = voices.filter(v => v.lang.includes('id'));
-            if(idVoices.length === 0) idVoices = voices; 
-            
-            let currentVal = appState.settings.attendance?.voiceEngine || 'auto';
-            let html = '<option value="auto">Deteksi Otomatis (Mencari suara perempuan...)</option>';
-            
-            idVoices.forEach(v => {
-                let isSelected = currentVal === v.name ? 'selected' : '';
-                html += `<option value="${v.name}" ${isSelected}>${v.name} (${v.lang})</option>`;
-            });
-            
-            select.innerHTML = html;
-        };
 
         const UI = {
             show: (id) => document.getElementById(id)?.classList.remove('hidden'),
@@ -126,13 +92,7 @@
                     if ('speechSynthesis' in window) {
                         window.speechSynthesis.cancel(); 
                         const msg = new SpeechSynthesisUtterance(voiceText);
-                        
-                        // RAHASIA SUARA MERDU: Jangan paksa pilih suara!
-                        // Biarkan Google Chrome memanggil Suara Online (Mbak Google) secara otomatis
                         msg.lang = 'id-ID'; 
-                        msg.rate = 0.9;  // Tempo sedikit diperlambat agar lebih rileks dan santai
-                        msg.pitch = 1.0; // Nada normal
-                        
                         window.speechSynthesis.speak(msg);
                         return;
                     } else {
@@ -140,7 +100,6 @@
                     }
                 }
 
-                // Kode fallback audio bip bawaan
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const osc = ctx.createOscillator();
                 const gainNode = ctx.createGain();
@@ -234,7 +193,6 @@
             if (!account) { UI.toast('Username tidak terdaftar di E-Rapot!', 'error'); return; }
             if (account.password !== passIn) { UI.toast('Kata sandi salah!', 'error'); return; }
             
-            // DETEKSI PERAN CERDAS (Toleransi kesalahan nama peran di database)
             if (account.role === 'Admin / Piket / Satpam') account.role = 'Petugas Piket';
 
             appState.user = account;
@@ -264,12 +222,10 @@
             let role = appState.user.role;
             let html = '';
 
-            // DASBOR, REKAP, & SISWA: Terbuka untuk semua KECUALI Guru Mapel
             if (role !== 'Guru Mapel') {
                 html += `<a href="#" onclick="switchView('dashboard')" data-view="dashboard" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-chart-pie w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Dasbor Real-Time</span></a>`;
             }
 
-            // SCANNER & INPUT MANUAL: Terbuka untuk SEMUA
             html += `<a href="#" onclick="switchView('scanner')" data-view="scanner" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-camera w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Scanner Kamera</span></a>`;
             html += `<a href="#" onclick="switchView('manual')" data-view="manual" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-edit w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Input Manual (S/I/A dll)</span></a>`;
             
@@ -280,7 +236,6 @@
                 `;
             }
             
-            // PENGATURAN: KHUSUS Admin dan Kepsek
             if (role === 'Admin' || role === 'Kepsek') {
                 html += `<a href="#" onclick="switchView('pengaturan')" data-view="pengaturan" class="nav-item flex items-center px-6 py-4 text-slate-300 hover:bg-slate-800 transition"><i class="fas fa-cogs w-6 text-center text-lg"></i><span class="mx-3 font-bold tracking-wide">Pengaturan Absensi</span></a>`;
             }
@@ -300,7 +255,7 @@
             if(window.chartInstance1) window.chartInstance1.destroy();
             if(window.chartInstance2) window.chartInstance2.destroy();
             
-            UI.hide('camera-wrapper'); UI.show('camera-activate-btn-container'); UI.hide('scanner-idle'); UI.hide('scanner-action');
+            UI.hide('camera-wrapper'); UI.show('camera-activate-btn-container'); UI.hide('scanner-idle'); UI.hide('scanner-action-overlay');
             
             const passInput = document.getElementById('login-password'); const eyeIcon = document.getElementById('eye-icon-login');
             if(passInput) passInput.type = 'password'; if(eyeIcon) { eyeIcon.classList.remove('fa-eye-slash'); eyeIcon.classList.add('fa-eye'); }
@@ -317,6 +272,9 @@
 
         window.switchView = (viewName) => {
             appState.currentView = viewName;
+            
+            window.isProcessingScan = false; 
+            
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-item').forEach(el => {
                 el.classList.remove('bg-emerald-800', 'border-l-4', 'border-white', 'text-white');
@@ -328,7 +286,7 @@
                 appState.html5QrcodeScanner.stop().then(() => {
                     appState.html5QrcodeScanner.clear(); appState.html5QrcodeScanner = null; 
                     UI.hide('camera-wrapper'); UI.show('camera-activate-btn-container'); 
-                    UI.hide('scanner-idle'); UI.hide('scanner-action');
+                    UI.hide('scanner-idle'); UI.hide('scanner-action-overlay');
                     document.getElementById('reader').innerHTML = ''; 
                 }).catch(err => { 
                     appState.html5QrcodeScanner = null; 
@@ -487,7 +445,7 @@
             if(htmlTelat === '') htmlTelat = `<tr><td colspan="4" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50"><i class="fas fa-smile mr-2"></i>Belum ada riwayat keterlambatan.</td></tr>`;
             document.getElementById('dash-table-telat').innerHTML = htmlTelat;
 
-            // GRAFIK 1: Tren 7 Hari Terakhir
+            // GRAFIK 1
             let labels7Days = []; let dataHadir7Days = [];
             let current = new Date(Date.now() - tzoffset);
             for(let i=6; i>=0; i--) {
@@ -518,7 +476,7 @@
                 });
             }
 
-            // GRAFIK 2: Kehadiran Per Kelas atau Distribusi Status (Jika Wali Kelas)
+            // GRAFIK 2
             if(window.chartInstance2) window.chartInstance2.destroy();
             const ctx2 = document.getElementById('dashAbsenChart2');
             
@@ -579,6 +537,8 @@
             UI.show('camera-wrapper'); 
             UI.show('scanner-idle');
             
+            window.isProcessingScan = false;
+            
             if(!appState.html5QrcodeScanner) {
                 appState.html5QrcodeScanner = new Html5Qrcode("reader");
             }
@@ -614,7 +574,6 @@
             if (!student) { 
                 UI.toast("QR Code Tidak Dikenali!", "error"); 
                 UI.playBeep(userSound === 'voice' ? 'voice' : 'error', 'Tidak Dikenali'); 
-                
                 setTimeout(() => { window.isProcessingScan = false; }, 2000); 
                 return; 
             }
@@ -626,21 +585,22 @@
             
             if (appState.attendance && appState.attendance[todayKey] && appState.attendance[todayKey][student.id]) {
                 const prevData = appState.attendance[todayKey][student.id];
-                
                 UI.playBeep(userSound === 'voice' ? 'voice' : 'error', 'Sudah Absen');
 
                 UI.hide('scanner-idle');
-                UI.html('scanner-action', `
-                    <div class="animate-fade-in bg-blue-500 text-white rounded-2xl p-6 shadow-xl text-center border-4 border-white transform transition-all scale-105">
-                        <i class="fas fa-info-circle text-6xl mb-3 animate-bounce"></i>
-                        <h3 class="text-2xl font-black mb-1 uppercase tracking-wider">${student.name}</h3>
+                UI.html('scanner-action-overlay', `
+                    <div class="animate-fade-in bg-blue-500 text-white rounded-3xl p-8 shadow-2xl text-center border-4 border-white w-full max-w-sm flex flex-col items-center justify-center">
+                        <i class="fas fa-info-circle text-7xl mb-4 animate-bounce"></i>
+                        <h3 class="text-2xl font-black mb-2 uppercase tracking-wider">${student.name}</h3>
                         <div class="text-3xl font-black font-russo uppercase drop-shadow-md">SUDAH ABSEN</div>
-                        <p class="text-sm font-medium mt-2 opacity-90"><i class="fas fa-history mr-1"></i> Tercatat pkl ${prevData.time} WITA</p>
+                        <p class="text-base font-medium mt-3 opacity-90 mb-4"><i class="fas fa-history mr-1"></i> Tercatat pkl ${prevData.time} WITA</p>
+                        <button onclick="resumeAfterSave()" class="bg-white text-blue-600 px-6 py-3 rounded-xl font-bold w-full shadow-lg transition transform hover:scale-105 active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan</button>
                     </div>
                 `);
-                UI.show('scanner-action');
+                UI.show('scanner-action-overlay');
+                document.getElementById('scanner-action-overlay').style.display = 'flex';
                 
-                setTimeout(() => { resumeAfterSave(); }, 2000);
+                window.lateTimeout = setTimeout(() => { resumeAfterSave(); }, 4000);
                 return; 
             }
 
@@ -652,7 +612,8 @@
             saveAttendance(window.detectedStatus);
         };
 
-        window.saveAttendance = (status) => {
+        // PERBAIKAN: Atomic Save untuk Multi-Device
+        window.saveAttendance = async (status) => {
             if(!appState.scannedStudent) return;
             const student = appState.scannedStudent;
             const userSound = appState.settings.attendance?.scanSound || 'voice';
@@ -665,7 +626,18 @@
             if (!appState.attendance[todayKey]) appState.attendance[todayKey] = {};
             
             appState.attendance[todayKey][student.id] = { status: status, time: timeStr };
-            saveDataToCloud('attendance');
+            
+            // ATOMIC SAVE untuk memastikan 3 HP tidak saling menabrak data
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
+                await updateDoc(docRef, {
+                    [`attendance.${todayKey}.${student.id}`]: { status: status, time: timeStr }
+                });
+            } catch(e) {
+                console.warn("Atomic update failed, using fallback.");
+                saveDataToCloud('attendance'); // Fallback
+            }
+
             UI.hide('scanner-idle');
             
             if (status === 'Terlambat') {
@@ -675,42 +647,54 @@
                 let message = `*PEMBERITAHUAN KEHADIRAN*\n\nYth. Orang Tua/Wali dari *${student.name}*,\n\nKami menginformasikan bahwa ananda telah tiba di sekolah pada pukul *${timeStr} WITA* dengan status kehadiran: *TERLAMBAT*.\n\nMohon bimbingan di rumah agar ananda dapat berangkat lebih awal. Terima kasih.\n\n_Sistem Absensi ${appState.settings.schoolName}_`;
                 
                 let waLink = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : '#';
-                let waBtnClass = phone ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md' : 'bg-gray-300 text-gray-500 cursor-not-allowed';
-                let waBtnClick = phone ? `setTimeout(() => { resumeAfterSave(); }, 500);` : `alert('Nomor WA belum diatur!'); setTimeout(() => { resumeAfterSave(); }, 500); return false;`;
+                let waBtnClass = phone ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl' : 'bg-gray-400 text-gray-100 cursor-not-allowed';
+                let waBtnClick = phone ? `setTimeout(() => { resumeAfterSave(); }, 500);` : `alert('Nomor WA belum diatur di menu Data Siswa!'); return false;`;
 
-                UI.html('scanner-action', `
-                    <div class="animate-fade-in bg-yellow-50 border-2 border-yellow-400 rounded-2xl p-6 shadow-xl text-center">
-                        <i class="fas fa-exclamation-triangle text-5xl text-yellow-500 mb-3 animate-bounce"></i>
-                        <h3 class="text-xl font-black mb-1 uppercase tracking-wider text-yellow-900">${student.name}</h3>
-                        <div class="text-3xl font-black font-russo uppercase text-yellow-600 mb-2">TERLAMBAT</div>
-                        <p class="text-sm font-medium text-gray-600 mb-4"><i class="fas fa-clock mr-1"></i> Jam Scan: ${timeStr} WITA</p>
-                        <div class="flex flex-col gap-2">
-                            <a href="${waLink}" target="${phone ? '_blank' : '_self'}" onclick="${waBtnClick}" class="${waBtnClass} py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition"><i class="fab fa-whatsapp text-lg"></i> Kirim WA Orang Tua</a>
-                            <button onclick="resumeAfterSave()" class="bg-white border-2 border-yellow-300 hover:bg-yellow-100 text-yellow-800 py-3 rounded-xl font-bold transition text-xs">Abaikan (Scan Berikutnya)</button>
+                UI.html('scanner-action-overlay', `
+                    <div class="animate-fade-in bg-yellow-50 border-4 border-yellow-400 rounded-3xl p-6 shadow-2xl text-center w-full max-w-sm relative flex flex-col items-center justify-center">
+                        <i class="fas fa-exclamation-triangle text-6xl text-yellow-500 mb-3 animate-bounce"></i>
+                        <h3 class="text-xl font-black mb-1 uppercase tracking-wider text-yellow-900 leading-tight">${student.name}</h3>
+                        <div class="text-4xl font-black font-russo uppercase text-yellow-600 mb-2 mt-1 drop-shadow-sm">TERLAMBAT</div>
+                        <p class="text-sm font-bold text-gray-600 mb-5"><i class="fas fa-clock mr-1"></i> Jam Scan: ${timeStr} WITA</p>
+                        <div class="flex flex-col gap-3 w-full">
+                            <a href="${waLink}" target="${phone ? '_blank' : '_self'}" onclick="${waBtnClick}" class="${waBtnClass} py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition text-sm"><i class="fab fa-whatsapp text-2xl"></i> Kirim WA Orang Tua</a>
+                            <button onclick="resumeAfterSave()" class="bg-white border-2 border-yellow-400 hover:bg-yellow-100 text-yellow-800 py-3.5 rounded-xl font-bold transition text-sm shadow-sm active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan Berikutnya</button>
                         </div>
                     </div>
                 `);
-                UI.show('scanner-action');
+                UI.show('scanner-action-overlay');
+                document.getElementById('scanner-action-overlay').style.display = 'flex';
+                
+                window.lateTimeout = setTimeout(() => { resumeAfterSave(); }, 15000);
+                
             } else {
                 UI.playBeep(userSound, 'Absen Berhasil'); 
 
-                UI.html('scanner-action', `
-                    <div class="animate-fade-in bg-emerald-500 text-white rounded-2xl p-6 shadow-xl text-center border-4 border-white transform transition-all scale-105">
-                        <i class="fas fa-check-circle text-6xl mb-3 animate-bounce"></i>
-                        <h3 class="text-2xl font-black mb-1 uppercase tracking-wider">${student.name}</h3>
-                        <div class="text-4xl font-black font-russo uppercase drop-shadow-md">HADIR</div>
-                        <p class="text-sm font-medium mt-2 opacity-90"><i class="fas fa-clock mr-1"></i> ${timeStr} WITA</p>
+                UI.html('scanner-action-overlay', `
+                    <div class="animate-fade-in bg-emerald-500 text-white rounded-3xl p-8 shadow-2xl text-center border-4 border-white w-full max-w-sm flex flex-col items-center justify-center">
+                        <i class="fas fa-check-circle text-7xl mb-4 animate-bounce"></i>
+                        <h3 class="text-2xl font-black mb-2 uppercase tracking-wider">${student.name}</h3>
+                        <div class="text-5xl font-black font-russo uppercase drop-shadow-md mb-3">HADIR</div>
+                        <p class="text-base font-medium mt-2 opacity-90 mb-4"><i class="fas fa-clock mr-1"></i> ${timeStr} WITA</p>
+                        <button onclick="resumeAfterSave()" class="bg-white text-emerald-600 px-6 py-3 rounded-xl font-bold w-full shadow-lg transition transform hover:scale-105 active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan</button>
                     </div>
                 `);
-                UI.show('scanner-action');
+                UI.show('scanner-action-overlay');
+                document.getElementById('scanner-action-overlay').style.display = 'flex';
                 
-                setTimeout(() => { resumeAfterSave(); }, 1500);
+                window.lateTimeout = setTimeout(() => { resumeAfterSave(); }, 3000);
             }
         };
 
         window.resumeAfterSave = () => {
+            if (window.lateTimeout) clearTimeout(window.lateTimeout);
+            
             appState.scannedStudent = null;
-            UI.hide('scanner-action'); 
+            
+            const overlay = document.getElementById('scanner-action-overlay');
+            if(overlay) overlay.style.display = 'none';
+            UI.hide('scanner-action-overlay'); 
+            
             UI.show('scanner-idle');
             window.isProcessingScan = false;
         };
@@ -799,19 +783,39 @@
             UI.html('manual-tbody', tbody);
         };
 
-        window.setManual = (sId, status) => {
+        // PERBAIKAN UTAMA: Atomic Update & deleteField untuk Hapus Permanen
+        window.setManual = async (sId, status) => {
             const dateKey = UI.val('manual-date');
             if(!appState.attendance) appState.attendance = {};
             if(!appState.attendance[dateKey]) appState.attendance[dateKey] = {};
             
-            if(status === 'Hapus') { delete appState.attendance[dateKey][sId]; } 
-            else {
-                let timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                appState.attendance[dateKey][sId] = { status: status, time: timeStr, manual: true };
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
+
+            try {
+                if(status === 'Hapus') { 
+                    delete appState.attendance[dateKey][sId]; // Hapus di HP
+                    
+                    // RUDAL PEMUSNAH ke Google Cloud
+                    await updateDoc(docRef, {
+                        [`attendance.${dateKey}.${sId}`]: deleteField()
+                    });
+                } else {
+                    let timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                    appState.attendance[dateKey][sId] = { status: status, time: timeStr, manual: true }; // Simpan di HP
+                    
+                    // ATOMIC SAVE ke Google Cloud
+                    await updateDoc(docRef, {
+                        [`attendance.${dateKey}.${sId}`]: { status: status, time: timeStr, manual: true }
+                    });
+                }
+                loadManualTable(); UI.toast('Status diperbarui!');
+                if (appState.currentView === 'dashboard') initDashboardCharts();
+            } catch(e) {
+                console.warn("Atomic update failed, using fallback save", e);
+                saveDataToCloud('attendance'); // Cadangan jika error
+                loadManualTable(); UI.toast('Status diperbarui!');
+                if (appState.currentView === 'dashboard') initDashboardCharts();
             }
-            
-            saveDataToCloud('attendance'); loadManualTable(); UI.toast('Status diperbarui!');
-            if (appState.currentView === 'dashboard') initDashboardCharts();
         };
 
         window.renderRekapitulasi = () => {
@@ -839,7 +843,6 @@
             Array.from(monthYears).sort().reverse().forEach(my => {
                 let [y, m] = my.split('-');
                 let monthName = new Date(y, parseInt(m)-1, 1).toLocaleDateString('id-ID', { month: 'long' });
-                // PERBAIKAN: Menghapus tahun ganda
                 monthOpts += `<option value="${my}" ${my === todayMY ? 'selected' : ''}>${monthName} ${y}</option>`;
             });
 
@@ -1044,7 +1047,6 @@
             UI.val('set-sound-scan', att.scanSound || 'voice');
             [0,1,2,3,4,5,6].forEach(d => { let cb = document.getElementById(`day-${d}`); if(cb) cb.checked = att.workDays.includes(d); });
             renderHolidaysList();
-            window.populateVoiceList();
         };
 
         window.renderHolidaysList = () => {
@@ -1079,7 +1081,6 @@
             if(!appState.settings.attendance) appState.settings.attendance = { holidays: [] };
             appState.settings.attendance.startTime = UI.val('set-jam-masuk');
             appState.settings.attendance.scanSound = UI.val('set-sound-scan');
-            appState.settings.attendance.voiceEngine = UI.val('set-voice-engine');
             let wDays = []; [0,1,2,3,4,5,6].forEach(d => { if(document.getElementById(`day-${d}`).checked) wDays.push(d); });
             appState.settings.attendance.workDays = wDays;
             saveDataToCloud('settings'); UI.toast('Pengaturan Tersimpan!');
@@ -1166,9 +1167,10 @@
                             <div id="camera-activate-btn-container" class="absolute z-20 flex flex-col items-center justify-center w-full h-full bg-slate-100/90 backdrop-blur-sm">
                                 <button onclick="startScanner()" class="w-56 h-16 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition-transform hover:scale-105 flex items-center justify-center gap-2 text-lg"><i class="fas fa-camera"></i> Aktifkan Kamera</button>
                             </div>
+
+                            <div id="scanner-action-overlay" class="absolute inset-0 z-50 hidden flex-col items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm transition-all duration-300"></div>
                         </div>
                         <div id="scanner-idle" class="mt-6 hidden"><div class="flex items-center justify-center gap-3 text-slate-400 font-bold uppercase tracking-widest text-sm bg-slate-50 py-3 rounded-xl border border-slate-200 shadow-inner"><i class="fas fa-qrcode animate-pulse"></i> Menunggu Scan Kartu...</div></div>
-                        <div id="scanner-action" class="mt-6 hidden"></div>
                     </div>
                 </div>
 
@@ -1249,15 +1251,6 @@
                                     <option value="mute">Bisu (Tanpa Suara)</option>
                                 </select>
                                 <button type="button" onclick="testSound()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-6 py-3 rounded-lg font-bold transition shadow-sm border border-blue-200"><i class="fas fa-play mr-2"></i> Tes Suara Sukses</button>
-                            </div>
-                            
-                            <!-- BAGIAN BARU: PEMILIH MESIN SUARA -->
-                            <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl">
-                                <label class="block text-xs font-bold text-blue-800 mb-2 uppercase tracking-wide"><i class="fas fa-robot mr-1"></i> Pilih Manual Mesin Suara (Jika Suaranya Jadi Laki-laki)</label>
-                                <p class="text-[11px] text-blue-600 mb-3">Daftar di bawah ini adalah semua suara yang ada di HP/Laptop Anda. Pilih yang ada kata <b>"Female"</b>, <b>"Damayanti"</b>, <b>"Gadis"</b>, atau <b>"Google"</b> agar suaranya merdu.</p>
-                                <select id="set-voice-engine" onchange="testSound()" class="border border-blue-200 p-2.5 rounded-lg font-bold text-blue-900 bg-white w-full outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="auto">Deteksi Otomatis (Mencari suara perempuan...)</option>
-                                </select>
                             </div>
                         </div>
 
