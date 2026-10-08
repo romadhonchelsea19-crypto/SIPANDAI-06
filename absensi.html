@@ -56,7 +56,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // TAMBAHAN: Import updateDoc dan deleteField untuk Atomic Update (Pemusnah Data)
+        // TAMBAHAN: Atomic Update dan deleteField
         import { getFirestore, doc, setDoc, onSnapshot, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const appId = 'sipandai-06-36543'; 
@@ -125,7 +125,7 @@
 
         window.testSound = () => {
             const soundType = UI.val('set-sound-scan');
-            UI.playBeep(soundType, 'Absen Berhasil');
+            UI.playBeep(soundType, 'Mbak Google Siap Digunakan');
         };
 
         async function initCloudApp() {
@@ -145,7 +145,7 @@
                     appState.teachers = data.teachers || [];
                     
                     if (!appState.settings.schoolName) appState.settings.schoolName = "SD NEGERI 06 MANADO";
-                    if (!appState.settings.attendance) appState.settings.attendance = { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice', voiceEngine: 'auto' };
+                    if (!appState.settings.attendance) appState.settings.attendance = { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice' };
                     if (!appState.settings.loginBg) appState.settings.loginBg = "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=2000";
                     if (!appState.settings.mainLogo) appState.settings.mainLogo = "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp";
 
@@ -273,7 +273,10 @@
         window.switchView = (viewName) => {
             appState.currentView = viewName;
             
+            // RESET KUNCI KAMERA SAAT PINDAH MENU
             window.isProcessingScan = false; 
+            if (window.lateTimeout) clearTimeout(window.lateTimeout);
+            UI.hide('scanner-action-overlay');
             
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-item').forEach(el => {
@@ -286,7 +289,7 @@
                 appState.html5QrcodeScanner.stop().then(() => {
                     appState.html5QrcodeScanner.clear(); appState.html5QrcodeScanner = null; 
                     UI.hide('camera-wrapper'); UI.show('camera-activate-btn-container'); 
-                    UI.hide('scanner-idle'); UI.hide('scanner-action-overlay');
+                    UI.hide('scanner-idle');
                     document.getElementById('reader').innerHTML = ''; 
                 }).catch(err => { 
                     appState.html5QrcodeScanner = null; 
@@ -371,7 +374,7 @@
                     </div>
                     <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col">
                         <div class="p-4 bg-red-50 border-b border-red-100 flex items-center justify-between">
-                            <h3 class="font-bold text-red-800 uppercase tracking-wide text-sm"><i class="fas fa-user-clock mr-2"></i> Belum Melakukan Absensi Hari Ini</h3>
+                            <h3 class="font-bold text-red-800 uppercase tracking-wide text-sm"><i class="fas fa-user-clock mr-2"></i> Belum Absen / S / I / A</h3>
                             <span class="text-[10px] bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold" id="dash-badge-belum">0 Siswa</span>
                         </div>
                         <div class="p-0 overflow-auto max-h-64">
@@ -395,33 +398,52 @@
             let tzoffset = (new Date()).getTimezoneOffset() * 60000; 
             const todayKey = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
 
-            let countHadir = 0, countTelat = 0, countSIA = 0, belumAbsenList = [];
+            let countHadir = 0, countTelat = 0, countSIA = 0, tidakHadirList = [];
             
             targetStds.forEach(s => {
                 if(appState.attendance[todayKey] && appState.attendance[todayKey][s.id]) {
                     const stat = appState.attendance[todayKey][s.id].status;
                     if(stat === 'Hadir') countHadir++;
                     else if(stat === 'Terlambat') countTelat++;
-                    else countSIA++;
+                    else {
+                        countSIA++;
+                        tidakHadirList.push({ student: s, status: stat });
+                    }
                 } else {
-                    belumAbsenList.push(s);
+                    tidakHadirList.push({ student: s, status: 'Belum Absen' });
                 }
             });
 
             const totalStds = targetStds.length;
+            let countBelum = tidakHadirList.filter(x => x.status === 'Belum Absen').length;
+
             document.getElementById('dash-tot-siswa').innerText = totalStds;
             document.getElementById('dash-tot-hadir').innerHTML = `${countHadir} <span class="text-sm font-bold text-gray-400">(${totalStds>0?Math.round((countHadir/totalStds)*100):0}%)</span>`;
             document.getElementById('dash-tot-telat').innerHTML = `${countTelat} <span class="text-sm font-bold text-gray-400">(${totalStds>0?Math.round((countTelat/totalStds)*100):0}%)</span>`;
-            document.getElementById('dash-tot-belum').innerText = countSIA + belumAbsenList.length;
+            document.getElementById('dash-tot-belum').innerText = tidakHadirList.length;
 
-            // Render Daftar Belum Absen
+            // Render Daftar Belum Absen + S/I/A yang 100% Cocok
             let htmlBelum = '';
-            belumAbsenList.sort((a,b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name)).forEach((s, i) => {
-                htmlBelum += `<tr class="hover:bg-slate-50"><td class="p-3 text-center text-gray-500 font-bold">${i+1}</td><td class="p-3 font-semibold text-gray-700">${s.name}</td><td class="p-3 text-center"><span class="bg-gray-100 border px-2 py-1 rounded text-xs font-bold">${s.class}</span></td></tr>`;
+            tidakHadirList.sort((a,b) => a.student.class.localeCompare(b.student.class) || a.student.name.localeCompare(b.student.name)).forEach((item, i) => {
+                let s = item.student;
+                let badgeClass = 'bg-gray-100 text-gray-500 border-gray-200';
+                if(item.status === 'Sakit') badgeClass = 'bg-blue-100 text-blue-700 border-blue-200';
+                else if(item.status === 'Izin') badgeClass = 'bg-orange-100 text-orange-700 border-orange-200';
+                else if(item.status === 'Alpa') badgeClass = 'bg-red-100 text-red-700 border-red-200';
+
+                htmlBelum += `<tr class="hover:bg-slate-50">
+                    <td class="p-3 text-center text-gray-500 font-bold">${i+1}</td>
+                    <td class="p-3 font-semibold text-gray-700 flex items-center justify-between gap-2">
+                        ${s.name} 
+                        <span class="px-2 py-0.5 rounded border text-[10px] font-bold whitespace-nowrap ${badgeClass}">${item.status}</span>
+                    </td>
+                    <td class="p-3 text-center"><span class="bg-gray-100 border px-2 py-1 rounded text-xs font-bold">${s.class}</span></td>
+                </tr>`;
             });
-            if(htmlBelum === '') htmlBelum = `<tr><td colspan="3" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50"><i class="fas fa-check-circle mr-2"></i>Semua siswa sudah diabsen!</td></tr>`;
+            
+            if(htmlBelum === '') htmlBelum = `<tr><td colspan="3" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50"><i class="fas fa-check-circle mr-2"></i>Semua siswa sudah diabsen / hadir!</td></tr>`;
             document.getElementById('dash-table-belum').innerHTML = htmlBelum;
-            document.getElementById('dash-badge-belum').innerText = `${belumAbsenList.length} Siswa`;
+            document.getElementById('dash-badge-belum').innerText = `${tidakHadirList.length} Siswa`;
 
             // Top Terlambat
             let telatDict = {};
@@ -484,7 +506,7 @@
                 document.getElementById('title-chart-2').innerHTML = `<i class="fas fa-chart-pie text-emerald-500 mr-2"></i> Distribusi Status Hari Ini`;
                 window.chartInstance2 = new Chart(ctx2, {
                     type: 'doughnut',
-                    data: { labels: ['Hadir Tepat', 'Terlambat', 'Sakit/Izin/Alpa', 'Belum Absen'], datasets: [{ data: [countHadir, countTelat, countSIA, belumAbsenList.length], backgroundColor: ['#10b981', '#eab308', '#ef4444', '#cbd5e1'], borderWidth: 0 }] },
+                    data: { labels: ['Hadir Tepat', 'Terlambat', 'Sakit/Izin/Alpa', 'Belum Absen'], datasets: [{ data: [countHadir, countTelat, countSIA, countBelum], backgroundColor: ['#10b981', '#eab308', '#ef4444', '#cbd5e1'], borderWidth: 0 }] },
                     options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'right' } } }
                 });
             } else if (ctx2) {
@@ -550,7 +572,7 @@
                 window.isProcessingScan = true; 
                 processScan(decodedText);
             }, (errorMessage) => { }).catch((err) => {
-                UI.toast("Gagal mengakses kamera. Pastikan izin kamera aktif.", "error");
+                UI.toast("Gagal mengakses kamera. Pastikan izin aktif.", "error");
                 UI.show('camera-activate-btn-container'); UI.hide('camera-wrapper'); UI.hide('scanner-idle');
             });
         };
@@ -612,7 +634,7 @@
             saveAttendance(window.detectedStatus);
         };
 
-        // PERBAIKAN: Atomic Save untuk Multi-Device
+        // ATOMIC SAVE untuk memastikan 3 HP tidak saling menabrak data
         window.saveAttendance = async (status) => {
             if(!appState.scannedStudent) return;
             const student = appState.scannedStudent;
@@ -627,7 +649,6 @@
             
             appState.attendance[todayKey][student.id] = { status: status, time: timeStr };
             
-            // ATOMIC SAVE untuk memastikan 3 HP tidak saling menabrak data
             try {
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
                 await updateDoc(docRef, {
@@ -635,7 +656,7 @@
                 });
             } catch(e) {
                 console.warn("Atomic update failed, using fallback.");
-                saveDataToCloud('attendance'); // Fallback
+                saveDataToCloud('attendance'); 
             }
 
             UI.hide('scanner-idle');
@@ -783,7 +804,7 @@
             UI.html('manual-tbody', tbody);
         };
 
-        // PERBAIKAN UTAMA: Atomic Update & deleteField untuk Hapus Permanen
+        // PEMUSNAH DATA GOOGLE
         window.setManual = async (sId, status) => {
             const dateKey = UI.val('manual-date');
             if(!appState.attendance) appState.attendance = {};
@@ -793,17 +814,15 @@
 
             try {
                 if(status === 'Hapus') { 
-                    delete appState.attendance[dateKey][sId]; // Hapus di HP
+                    delete appState.attendance[dateKey][sId]; 
                     
-                    // RUDAL PEMUSNAH ke Google Cloud
                     await updateDoc(docRef, {
                         [`attendance.${dateKey}.${sId}`]: deleteField()
                     });
                 } else {
                     let timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                    appState.attendance[dateKey][sId] = { status: status, time: timeStr, manual: true }; // Simpan di HP
+                    appState.attendance[dateKey][sId] = { status: status, time: timeStr, manual: true }; 
                     
-                    // ATOMIC SAVE ke Google Cloud
                     await updateDoc(docRef, {
                         [`attendance.${dateKey}.${sId}`]: { status: status, time: timeStr, manual: true }
                     });
@@ -812,7 +831,7 @@
                 if (appState.currentView === 'dashboard') initDashboardCharts();
             } catch(e) {
                 console.warn("Atomic update failed, using fallback save", e);
-                saveDataToCloud('attendance'); // Cadangan jika error
+                saveDataToCloud('attendance'); 
                 loadManualTable(); UI.toast('Status diperbarui!');
                 if (appState.currentView === 'dashboard') initDashboardCharts();
             }
@@ -1042,7 +1061,7 @@
         };
 
         window.renderPengaturan = () => {
-            let att = appState.settings.attendance || { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice', voiceEngine: 'auto' };
+            let att = appState.settings.attendance || { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice' };
             UI.val('set-jam-masuk', att.startTime);
             UI.val('set-sound-scan', att.scanSound || 'voice');
             [0,1,2,3,4,5,6].forEach(d => { let cb = document.getElementById(`day-${d}`); if(cb) cb.checked = att.workDays.includes(d); });
@@ -1066,15 +1085,24 @@
         window.addHoliday = () => {
             const dateVal = UI.val('new-holiday-date');
             if(!dateVal) { UI.toast("Pilih tanggal dahulu!", "error"); return; }
-            if(!appState.settings.attendance) appState.settings.attendance = { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice', voiceEngine: 'auto' };
+            if(!appState.settings.attendance) appState.settings.attendance = { startTime: '07:15', workDays: [1,2,3,4,5], holidays: [], scanSound: 'voice' };
             if(!appState.settings.attendance.holidays.includes(dateVal)) { appState.settings.attendance.holidays.push(dateVal); renderHolidaysList(); UI.val('new-holiday-date', ''); } 
             else { UI.toast("Tanggal sudah ada", "error"); }
         };
 
-        window.removeHoliday = (dateStr) => {
+        window.removeHoliday = async (dateStr) => {
             if(!appState.settings.attendance) return;
             appState.settings.attendance.holidays = appState.settings.attendance.holidays.filter(h => h !== dateStr);
             renderHolidaysList();
+            
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
+                await updateDoc(docRef, {
+                    'settings.attendance.holidays': appState.settings.attendance.holidays
+                });
+            } catch (e) {
+                saveDataToCloud('settings');
+            }
         };
 
         window.savePengaturan = () => {
@@ -1250,7 +1278,7 @@
                                     <option value="bell">Nada Lonceng Halus</option>
                                     <option value="mute">Bisu (Tanpa Suara)</option>
                                 </select>
-                                <button type="button" onclick="testSound()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-6 py-3 rounded-lg font-bold transition shadow-sm border border-blue-200"><i class="fas fa-play mr-2"></i> Tes Suara Sukses</button>
+                                <button type="button" onclick="testSound()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-6 py-3 rounded-lg font-bold transition shadow-sm border border-blue-200"><i class="fas fa-play mr-2"></i> Tes Suara</button>
                             </div>
                         </div>
 
