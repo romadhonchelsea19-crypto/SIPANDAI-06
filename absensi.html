@@ -1069,12 +1069,12 @@
 
             studentList.forEach(s => {
                 let card = document.createElement('div');
-                // TINGGI FLEKSIBEL (min-height) agar tulisan kelas di bawah tidak terpotong jika nama siswa panjang
-                card.style.cssText = 'page-break-inside: avoid; width: 220px; min-height: 350px; border: 1px solid #cbd5e1; border-radius: 12px; position: relative; background: white; display: flex; flex-direction: column; box-sizing: border-box; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; overflow: visible;';
+                // UPDATE: Lebar 240px, Tinggi fleksibel min 340px agar lebih lebar dan proporsional seperti B2/B3 Card Holder
+                card.style.cssText = 'page-break-inside: avoid; width: 240px; min-height: 340px; border: 1px solid #cbd5e1; border-radius: 12px; position: relative; background: white; display: flex; flex-direction: column; box-sizing: border-box; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; overflow: visible;';
                 
                 // HEADER MERAH TANPA LUBANG LANYARD
                 let header = document.createElement('div');
-                header.style.cssText = 'background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%); color: white; padding: 20px 10px 15px 10px; text-align: center; border-bottom: 4px solid #fca5a5; flex-shrink: 0; border-radius: 12px 12px 0 0;';
+                header.style.cssText = 'background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%); color: white; padding: 15px 10px 12px 10px; text-align: center; border-bottom: 4px solid #fca5a5; flex-shrink: 0; border-radius: 12px 12px 0 0;';
                 
                 let logoSrc = appState.settings.mainLogo || 'cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp';
                 header.innerHTML = `
@@ -1089,7 +1089,7 @@
                 
                 let qrWrapper = document.createElement('div');
                 qrWrapper.id = `qr_${s.id}`;
-                // UKURAN QR CODE sedikit diperkecil agar ruang untuk tulisan KELAS di bawahnya luas
+                // UKURAN QR CODE 110px agar pas
                 qrWrapper.style.cssText = 'padding: 8px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; margin: 0 auto 12px auto; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.05);';
                 
                 let info = document.createElement('div');
@@ -1110,7 +1110,7 @@
                 
                 container.appendChild(card);
                 
-                // Generate QR code ukuran 110x110
+                // Generate QR code
                 new QRCode(qrWrapper, { text: s.id, width: 110, height: 110, colorDark : "#7f1d1d", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
             });
 
