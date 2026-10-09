@@ -42,12 +42,11 @@
         #sidebar-overlay { z-index: 40; }
 
         @media print {
-            body { background: white !important; }
+            body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             #app-screen, #login-screen { display: none !important; }
             .no-print { display: none !important; }
             
-            #print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; padding: 10px; }
-            .qr-card { page-break-inside: avoid; border: 2px solid #0f172a; padding: 15px; margin: 15px; width: 240px; text-align: center; display: inline-block; background: white; border-radius: 12px; }
+            #print-area { display: flex !important; flex-wrap: wrap; justify-content: center; gap: 15px; position: absolute; left: 0; top: 0; width: 100%; padding: 10px; background: white; }
         }
     </style>
 </head>
@@ -56,7 +55,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // TAMBAHAN: Atomic Update dan deleteField
         import { getFirestore, doc, setDoc, onSnapshot, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const appId = 'sipandai-06-36543'; 
@@ -255,7 +253,9 @@
             if(window.chartInstance1) window.chartInstance1.destroy();
             if(window.chartInstance2) window.chartInstance2.destroy();
             
-            UI.hide('camera-wrapper'); UI.show('camera-activate-btn-container'); UI.hide('scanner-idle'); UI.hide('scanner-action-overlay');
+            UI.hide('camera-wrapper'); UI.show('camera-activate-btn-container'); UI.hide('scanner-idle'); 
+            const overlay = document.getElementById('scanner-action-overlay');
+            if(overlay) overlay.style.display = 'none';
             
             const passInput = document.getElementById('login-password'); const eyeIcon = document.getElementById('eye-icon-login');
             if(passInput) passInput.type = 'password'; if(eyeIcon) { eyeIcon.classList.remove('fa-eye-slash'); eyeIcon.classList.add('fa-eye'); }
@@ -273,10 +273,10 @@
         window.switchView = (viewName) => {
             appState.currentView = viewName;
             
-            // RESET KUNCI KAMERA SAAT PINDAH MENU
             window.isProcessingScan = false; 
             if (window.lateTimeout) clearTimeout(window.lateTimeout);
-            UI.hide('scanner-action-overlay');
+            const overlay = document.getElementById('scanner-action-overlay');
+            if(overlay) overlay.style.display = 'none';
             
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-item').forEach(el => {
@@ -299,7 +299,7 @@
             }
 
             if (viewName === 'dashboard') { renderDashboard(); setTimeout(initDashboardCharts, 100); }
-            if (viewName === 'scanner') renderScanner();
+            if (viewName === 'scanner') { renderScanner(); window.isProcessingScan = false; } 
             if (viewName === 'manual') renderManual();
             if (viewName === 'rekap') renderRekapitulasi();
             if (viewName === 'siswa') renderDataSiswa();
@@ -308,9 +308,6 @@
             closeSidebar();
         }
 
-        // ==============================
-        // FITUR DASHBOARD REAL-TIME
-        // ==============================
         function renderDashboard() {
             let infoDesc = appState.user.role === 'Wali Kelas' ? `Pantauan Kelas ${appState.user.assignedClass}` : 'Pantauan Seluruh Sekolah';
             let content = `
@@ -374,12 +371,12 @@
                     </div>
                     <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col">
                         <div class="p-4 bg-red-50 border-b border-red-100 flex items-center justify-between">
-                            <h3 class="font-bold text-red-800 uppercase tracking-wide text-sm"><i class="fas fa-user-clock mr-2"></i> Belum Absen / S / I / A</h3>
+                            <h3 class="font-bold text-red-800 uppercase tracking-wide text-sm"><i class="fas fa-user-clock mr-2"></i> Belum Melakukan Absensi</h3>
                             <span class="text-[10px] bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold" id="dash-badge-belum">0 Siswa</span>
                         </div>
                         <div class="p-0 overflow-auto max-h-64">
                             <table class="w-full text-sm text-left">
-                                <thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm"><tr><th class="p-3 w-10 text-center">No</th><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Kelas</th></tr></thead>
+                                <thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm z-10"><tr><th class="p-3 w-10 text-center">No</th><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Kelas</th></tr></thead>
                                 <tbody id="dash-table-belum" class="divide-y divide-gray-100"></tbody>
                             </table>
                         </div>
@@ -420,9 +417,9 @@
             document.getElementById('dash-tot-siswa').innerText = totalStds;
             document.getElementById('dash-tot-hadir').innerHTML = `${countHadir} <span class="text-sm font-bold text-gray-400">(${totalStds>0?Math.round((countHadir/totalStds)*100):0}%)</span>`;
             document.getElementById('dash-tot-telat').innerHTML = `${countTelat} <span class="text-sm font-bold text-gray-400">(${totalStds>0?Math.round((countTelat/totalStds)*100):0}%)</span>`;
-            document.getElementById('dash-tot-belum').innerText = tidakHadirList.length;
+            document.getElementById('dash-tot-belum').innerText = tidakHadirList.length; 
 
-            // Render Daftar Belum Absen + S/I/A yang 100% Cocok
+            // Render Daftar Belum Absen + S/I/A secara digabung (FIXED Dashboard Info)
             let htmlBelum = '';
             tidakHadirList.sort((a,b) => a.student.class.localeCompare(b.student.class) || a.student.name.localeCompare(b.student.name)).forEach((item, i) => {
                 let s = item.student;
@@ -534,8 +531,6 @@
             }
         };
 
-        // ==============================
-
         function renderScanner() {
             let today = new Date();
             let dateStr = today.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -610,7 +605,8 @@
                 UI.playBeep(userSound === 'voice' ? 'voice' : 'error', 'Sudah Absen');
 
                 UI.hide('scanner-idle');
-                UI.html('scanner-action-overlay', `
+                const overlay = document.getElementById('scanner-action-overlay');
+                overlay.innerHTML = `
                     <div class="animate-fade-in bg-blue-500 text-white rounded-3xl p-8 shadow-2xl text-center border-4 border-white w-full max-w-sm flex flex-col items-center justify-center">
                         <i class="fas fa-info-circle text-7xl mb-4 animate-bounce"></i>
                         <h3 class="text-2xl font-black mb-2 uppercase tracking-wider">${student.name}</h3>
@@ -618,10 +614,10 @@
                         <p class="text-base font-medium mt-3 opacity-90 mb-4"><i class="fas fa-history mr-1"></i> Tercatat pkl ${prevData.time} WITA</p>
                         <button onclick="resumeAfterSave()" class="bg-white text-blue-600 px-6 py-3 rounded-xl font-bold w-full shadow-lg transition transform hover:scale-105 active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan</button>
                     </div>
-                `);
-                UI.show('scanner-action-overlay');
-                document.getElementById('scanner-action-overlay').style.display = 'flex';
+                `;
+                overlay.style.display = 'flex';
                 
+                // Auto resume in 4 seconds for duplicate scans
                 window.lateTimeout = setTimeout(() => { resumeAfterSave(); }, 4000);
                 return; 
             }
@@ -634,7 +630,6 @@
             saveAttendance(window.detectedStatus);
         };
 
-        // ATOMIC SAVE untuk memastikan 3 HP tidak saling menabrak data
         window.saveAttendance = async (status) => {
             if(!appState.scannedStudent) return;
             const student = appState.scannedStudent;
@@ -660,6 +655,7 @@
             }
 
             UI.hide('scanner-idle');
+            const overlay = document.getElementById('scanner-action-overlay');
             
             if (status === 'Terlambat') {
                 UI.playBeep(userSound === 'voice' ? 'voice' : 'error', 'Siswa Terlambat'); 
@@ -671,7 +667,7 @@
                 let waBtnClass = phone ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl' : 'bg-gray-400 text-gray-100 cursor-not-allowed';
                 let waBtnClick = phone ? `setTimeout(() => { resumeAfterSave(); }, 500);` : `alert('Nomor WA belum diatur di menu Data Siswa!'); return false;`;
 
-                UI.html('scanner-action-overlay', `
+                overlay.innerHTML = `
                     <div class="animate-fade-in bg-yellow-50 border-4 border-yellow-400 rounded-3xl p-6 shadow-2xl text-center w-full max-w-sm relative flex flex-col items-center justify-center">
                         <i class="fas fa-exclamation-triangle text-6xl text-yellow-500 mb-3 animate-bounce"></i>
                         <h3 class="text-xl font-black mb-1 uppercase tracking-wider text-yellow-900 leading-tight">${student.name}</h3>
@@ -682,16 +678,16 @@
                             <button onclick="resumeAfterSave()" class="bg-white border-2 border-yellow-400 hover:bg-yellow-100 text-yellow-800 py-3.5 rounded-xl font-bold transition text-sm shadow-sm active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan Berikutnya</button>
                         </div>
                     </div>
-                `);
-                UI.show('scanner-action-overlay');
-                document.getElementById('scanner-action-overlay').style.display = 'flex';
+                `;
+                overlay.style.display = 'flex';
                 
+                // Ditahan 15 detik agar guru sempat tekan tombol WA
                 window.lateTimeout = setTimeout(() => { resumeAfterSave(); }, 15000);
                 
             } else {
                 UI.playBeep(userSound, 'Absen Berhasil'); 
 
-                UI.html('scanner-action-overlay', `
+                overlay.innerHTML = `
                     <div class="animate-fade-in bg-emerald-500 text-white rounded-3xl p-8 shadow-2xl text-center border-4 border-white w-full max-w-sm flex flex-col items-center justify-center">
                         <i class="fas fa-check-circle text-7xl mb-4 animate-bounce"></i>
                         <h3 class="text-2xl font-black mb-2 uppercase tracking-wider">${student.name}</h3>
@@ -699,10 +695,10 @@
                         <p class="text-base font-medium mt-2 opacity-90 mb-4"><i class="fas fa-clock mr-1"></i> ${timeStr} WITA</p>
                         <button onclick="resumeAfterSave()" class="bg-white text-emerald-600 px-6 py-3 rounded-xl font-bold w-full shadow-lg transition transform hover:scale-105 active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan</button>
                     </div>
-                `);
-                UI.show('scanner-action-overlay');
-                document.getElementById('scanner-action-overlay').style.display = 'flex';
+                `;
+                overlay.style.display = 'flex';
                 
+                // Auto resume in 3 seconds for regular attendance
                 window.lateTimeout = setTimeout(() => { resumeAfterSave(); }, 3000);
             }
         };
@@ -714,9 +710,10 @@
             
             const overlay = document.getElementById('scanner-action-overlay');
             if(overlay) overlay.style.display = 'none';
-            UI.hide('scanner-action-overlay'); 
             
             UI.show('scanner-idle');
+            
+            // Force reset processing lock so the camera can immediately scan the next person
             window.isProcessingScan = false;
         };
 
@@ -764,6 +761,9 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- Overlay untuk Notif WA Manual (Khusus Terlambat) -->
+                <div id="manual-action-overlay" class="fixed inset-0 z-[100] hidden flex-col items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm transition-all duration-300" style="display: none;"></div>
             `;
             UI.html('view-manual', html);
             if (appState.user.role === 'Wali Kelas') loadManualTable();
@@ -797,43 +797,76 @@
                     <tr class="hover:bg-slate-50">
                         <td class="p-4 text-center font-bold text-gray-500">${i+1}</td>
                         <td class="p-4"><div class="font-bold text-gray-800">${s.name}</div><div class="font-mono text-xs text-gray-500">${s.nis}</div></td>
-                        <td class="p-4 text-center"><div class="flex flex-wrap justify-center gap-1.5">${btn('Hadir', 'emerald', 'Hadir', 'fa-check-circle')}${btn('Terlambat', 'yellow', 'Telat', 'fa-clock')}${btn('Sakit', 'blue', 'Sakit', 'fa-procedures')}${btn('Izin', 'orange', 'Izin', 'fa-envelope-open-text')}${btn('Alpa', 'red', 'Alpa', 'fa-user-times')}<button onclick="setManual('${s.id}', 'Hapus')" class="px-3 py-2 rounded-lg font-bold text-xs bg-gray-100 text-gray-500 hover:bg-gray-200 ml-1 border" title="Hapus Status"><i class="fas fa-eraser"></i></button></div></td>
+                        <td class="p-4 text-center"><div class="flex flex-wrap justify-center gap-1.5">${btn('Hadir', 'emerald', 'Hadir', 'fa-check-circle')}${btn('Terlambat', 'yellow', 'Telat', 'fa-clock')}${btn('Sakit', 'blue', 'Sakit', 'fa-procedures')}${btn('Izin', 'orange', 'Izin', 'fa-envelope-open-text')}${btn('Alpa', 'red', 'Alpa', 'fa-user-times')}<button onclick="setManual('${s.id}', 'Hapus')" class="px-3 py-2 rounded-lg font-bold text-xs bg-gray-100 text-gray-500 hover:bg-gray-200 ml-1 border" title="Hapus Status (DeleteField)"><i class="fas fa-eraser"></i></button></div></td>
                     </tr>
                 `;
             });
             UI.html('manual-tbody', tbody);
         };
 
-        // PEMUSNAH DATA GOOGLE
         window.setManual = async (sId, status) => {
             const dateKey = UI.val('manual-date');
             if(!appState.attendance) appState.attendance = {};
             if(!appState.attendance[dateKey]) appState.attendance[dateKey] = {};
             
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
+            let timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
             try {
                 if(status === 'Hapus') { 
                     delete appState.attendance[dateKey][sId]; 
                     
+                    // Rudal Pemusnah "Data Hantu"
                     await updateDoc(docRef, {
                         [`attendance.${dateKey}.${sId}`]: deleteField()
                     });
                 } else {
-                    let timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
                     appState.attendance[dateKey][sId] = { status: status, time: timeStr, manual: true }; 
                     
+                    // Atomic Update
                     await updateDoc(docRef, {
                         [`attendance.${dateKey}.${sId}`]: { status: status, time: timeStr, manual: true }
                     });
                 }
-                loadManualTable(); UI.toast('Status diperbarui!');
-                if (appState.currentView === 'dashboard') initDashboardCharts();
             } catch(e) {
                 console.warn("Atomic update failed, using fallback save", e);
                 saveDataToCloud('attendance'); 
-                loadManualTable(); UI.toast('Status diperbarui!');
-                if (appState.currentView === 'dashboard') initDashboardCharts();
+            }
+            
+            loadManualTable(); 
+            UI.toast('Status diperbarui!');
+            if (appState.currentView === 'dashboard') initDashboardCharts();
+
+            // POPUP WA LAYAR PENUH KHUSUS JIKA TELAT (MANUAL INPUT)
+            if (status === 'Terlambat') {
+                const student = appState.students.find(s => s.id === sId);
+                if (student) {
+                    let phone = student.parentPhone || ''; if (phone.startsWith('0')) phone = '62' + phone.substring(1);
+                    let message = `*PEMBERITAHUAN KEHADIRAN*\n\nYth. Orang Tua/Wali dari *${student.name}*,\n\nKami menginformasikan bahwa ananda telah tiba di sekolah pada pukul *${timeStr} WITA* dengan status kehadiran: *TERLAMBAT*.\n\nMohon bimbingan di rumah agar ananda dapat berangkat lebih awal. Terima kasih.\n\n_Sistem Absensi ${appState.settings.schoolName}_`;
+                    
+                    let waLink = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : '#';
+                    let waBtnClass = phone ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl' : 'bg-gray-400 text-gray-100 cursor-not-allowed';
+                    let waBtnClick = phone ? `document.getElementById('manual-action-overlay').style.display='none';` : `alert('Nomor WA belum diatur di menu Data Siswa!'); return false;`;
+
+                    let overlayHtml = `
+                        <div class="animate-fade-in bg-yellow-50 border-4 border-yellow-400 rounded-3xl p-6 shadow-2xl text-center w-full max-w-sm relative flex flex-col items-center justify-center">
+                            <i class="fas fa-exclamation-triangle text-6xl text-yellow-500 mb-3 animate-bounce"></i>
+                            <h3 class="text-xl font-black mb-1 uppercase tracking-wider text-yellow-900 leading-tight">${student.name}</h3>
+                            <div class="text-4xl font-black font-russo uppercase text-yellow-600 mb-2 mt-1 drop-shadow-sm">TERLAMBAT</div>
+                            <p class="text-sm font-bold text-gray-600 mb-5"><i class="fas fa-clock mr-1"></i> Jam Input: ${timeStr} WITA</p>
+                            <div class="flex flex-col gap-3 w-full">
+                                <a href="${waLink}" target="${phone ? '_blank' : '_self'}" onclick="${waBtnClick}" class="${waBtnClass} py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition text-sm"><i class="fab fa-whatsapp text-2xl"></i> Kirim WA Orang Tua</a>
+                                <button onclick="document.getElementById('manual-action-overlay').style.display='none';" class="bg-white border-2 border-yellow-400 hover:bg-yellow-100 text-yellow-800 py-3.5 rounded-xl font-bold transition text-sm shadow-sm active:scale-95"><i class="fas fa-times mr-2"></i> Tutup & Lanjut</button>
+                            </div>
+                        </div>
+                    `;
+                    const overlay = document.getElementById('manual-action-overlay');
+                    if (overlay) {
+                        overlay.innerHTML = overlayHtml;
+                        overlay.style.display = 'flex';
+                        UI.playBeep(appState.settings.attendance?.scanSound || 'voice', 'Siswa Terlambat');
+                    }
+                }
             }
         };
 
@@ -1021,42 +1054,71 @@
             printQRCodes(stds);
         };
 
+        // NEW: PROFESSIONAL ID CARD DESIGN
         window.printQRCodes = (studentList) => {
             let container = document.getElementById('print-area'); 
             container.innerHTML = ''; 
-            
             container.classList.remove('hidden', 'no-print');
+            
+            // Flex container to display cleanly before print triggers
+            container.style.display = 'flex';
+            container.style.flexWrap = 'wrap';
+            container.style.justifyContent = 'center';
+            container.style.gap = '15px';
+            container.style.padding = '20px';
+            container.style.background = 'white';
 
             studentList.forEach(s => {
-                let card = document.createElement('div'); 
-                card.className = 'qr-card bg-white rounded-xl overflow-hidden shadow-sm';
+                let card = document.createElement('div');
+                // Professional Portrait ID Card Style (Inline CSS for robust Print compatibility)
+                card.style.cssText = 'page-break-inside: avoid; width: 220px; height: 350px; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; position: relative; background: white; display: flex; flex-direction: column; box-sizing: border-box; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px;';
                 
-                let header = document.createElement('div'); 
-                header.className = 'bg-slate-900 text-white p-2 font-russo text-sm uppercase'; 
-                header.innerText = appState.settings.schoolName || 'KARTU ABSENSI';
+                // Header (Dark Red to Bright Red Gradient)
+                let header = document.createElement('div');
+                header.style.cssText = 'background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%); color: white; padding: 25px 10px 15px 10px; text-align: center; border-bottom: 4px solid #fca5a5; flex-shrink: 0;';
                 
-                let body = document.createElement('div'); 
-                body.className = 'p-4 flex flex-col items-center justify-center bg-white';
+                let logoSrc = appState.settings.mainLogo || 'cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp';
+                header.innerHTML = `
+                    <img src="${logoSrc}" style="width: 45px; height: 45px; object-fit: contain; margin: 0 auto 8px auto; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
+                    <div style="font-family: \'Russo One\', sans-serif; font-size: 13px; letter-spacing: 1px; margin-bottom: 2px;">KARTU ABSENSI</div>
+                    <div style="font-size: 10px; font-weight: bold; text-transform: uppercase; opacity: 0.9;">${appState.settings.schoolName || 'SD NEGERI 06 MANADO'}</div>
+                `;
                 
-                let qrWrapper = document.createElement('div'); 
-                qrWrapper.id = `qr_${s.id}`; 
-                qrWrapper.className = 'mb-3 p-2 bg-white rounded-lg inline-block';
+                // Body (QR + Info)
+                let body = document.createElement('div');
+                body.style.cssText = 'flex-grow: 1; padding: 15px 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8fafc;';
                 
-                let info = document.createElement('div'); 
-                info.innerHTML = `<h3 class="font-bold text-gray-800 text-sm mb-1 leading-tight uppercase">${s.name}</h3><p class="text-xs font-mono text-gray-500">NISN: ${s.nis}</p><p class="text-xs font-bold text-emerald-600 mt-1 px-3 py-1 bg-emerald-50 rounded-full inline-block border border-emerald-200">Kelas ${s.class}</p>`;
+                let qrWrapper = document.createElement('div');
+                qrWrapper.id = `qr_${s.id}`;
+                qrWrapper.style.cssText = 'padding: 8px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; margin: 0 auto 15px auto; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.05);';
                 
-                body.appendChild(qrWrapper); 
-                body.appendChild(info); 
-                card.appendChild(header); 
-                card.appendChild(body); 
+                let info = document.createElement('div');
+                info.style.cssText = 'line-height: 1.4; width: 100%;';
+                info.innerHTML = `
+                    <div style="font-weight: 900; color: #1e293b; font-size: 15px; margin-bottom: 4px; text-transform: uppercase; word-wrap: break-word;">${s.name}</div>
+                    <div style="font-family: monospace; color: #64748b; font-size: 11px; margin-bottom: 10px;">NISN: ${s.nis}</div>
+                    <div style="background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 4px 16px; border-radius: 20px; font-size: 13px; font-weight: bold; display: inline-block; letter-spacing: 0.5px;">Kelas ${s.class}</div>
+                `;
+                
+                body.appendChild(qrWrapper);
+                body.appendChild(info);
+                
+                card.appendChild(header);
+                card.appendChild(body);
+                
                 container.appendChild(card);
                 
-                new QRCode(qrWrapper, { text: s.id, width: 140, height: 140, colorDark : "#0f172a", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
+                // Generate QR code (Warnanya diubah menjadi merah gelap agar senada)
+                new QRCode(qrWrapper, { text: s.id, width: 120, height: 120, colorDark : "#450a0a", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
             });
 
+            // Wait for QR codes to render before printing
             setTimeout(() => { 
                 window.print(); 
-                setTimeout(() => { container.classList.add('hidden', 'no-print'); }, 1000);
+                setTimeout(() => { 
+                    container.classList.add('hidden', 'no-print'); 
+                    container.style.display = 'none';
+                }, 1000);
             }, 800);
         };
 
@@ -1076,7 +1138,7 @@
                     let dateStr = new Date(h).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
                     html += `<div class="flex justify-between items-center bg-red-50 text-red-800 px-4 py-3 rounded-lg border border-red-200 mb-2 font-bold text-sm">
                         <span><i class="fas fa-calendar-times mr-2"></i> ${dateStr}</span>
-                        <button type="button" onclick="removeHoliday('${h}')" class="text-red-500 hover:text-red-700 bg-white p-2 rounded shadow-sm border"><i class="fas fa-trash"></i></button></div>`;
+                        <button type="button" onclick="removeHoliday('${h}')" class="text-red-500 hover:text-red-700 bg-white p-2 rounded shadow-sm border" title="Hapus Libur (DeleteField)"><i class="fas fa-trash"></i></button></div>`;
                 });
             }
             UI.html('holidays-list', html);
@@ -1196,14 +1258,14 @@
                                 <button onclick="startScanner()" class="w-56 h-16 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition-transform hover:scale-105 flex items-center justify-center gap-2 text-lg"><i class="fas fa-camera"></i> Aktifkan Kamera</button>
                             </div>
 
-                            <div id="scanner-action-overlay" class="absolute inset-0 z-50 hidden flex-col items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm transition-all duration-300"></div>
+                            <div id="scanner-action-overlay" class="absolute inset-0 z-[100] hidden flex-col items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm transition-all duration-300"></div>
                         </div>
                         <div id="scanner-idle" class="mt-6 hidden"><div class="flex items-center justify-center gap-3 text-slate-400 font-bold uppercase tracking-widest text-sm bg-slate-50 py-3 rounded-xl border border-slate-200 shadow-inner"><i class="fas fa-qrcode animate-pulse"></i> Menunggu Scan Kartu...</div></div>
                     </div>
                 </div>
 
                 <div id="view-manual" class="view-section hidden flex-col p-4 md:p-8"></div>
-
+                
                 <div id="view-rekap" class="view-section hidden flex-col p-4 md:p-8">
                     <div class="flex flex-col lg:flex-row justify-between mb-6 gap-4">
                         <div><h2 class="text-2xl font-bold font-russo tracking-wide text-slate-800">Rekapitulasi Bulanan</h2><p class="text-sm text-gray-500 mt-1">Data hari merah/libur otomatis diblok warna merah.</p></div>
