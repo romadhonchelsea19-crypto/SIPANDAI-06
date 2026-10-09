@@ -419,7 +419,7 @@
             document.getElementById('dash-tot-telat').innerHTML = `${countTelat} <span class="text-sm font-bold text-gray-400">(${totalStds>0?Math.round((countTelat/totalStds)*100):0}%)</span>`;
             document.getElementById('dash-tot-belum').innerText = tidakHadirList.length; 
 
-            // Render Daftar Belum Absen + S/I/A secara digabung (FIXED Dashboard Info)
+            // Render Daftar Belum Absen + S/I/A secara digabung
             let htmlBelum = '';
             tidakHadirList.sort((a,b) => a.student.class.localeCompare(b.student.class) || a.student.name.localeCompare(b.student.name)).forEach((item, i) => {
                 let s = item.student;
@@ -1054,13 +1054,12 @@
             printQRCodes(stds);
         };
 
-        // NEW: PROFESSIONAL ID CARD DESIGN
+        // KODE BARU DESAIN KARTU MERAH TULISAN KELAS TEBAL
         window.printQRCodes = (studentList) => {
             let container = document.getElementById('print-area'); 
             container.innerHTML = ''; 
             container.classList.remove('hidden', 'no-print');
             
-            // Flex container to display cleanly before print triggers
             container.style.display = 'flex';
             container.style.flexWrap = 'wrap';
             container.style.justifyContent = 'center';
@@ -1070,34 +1069,37 @@
 
             studentList.forEach(s => {
                 let card = document.createElement('div');
-                // Professional Portrait ID Card Style (Inline CSS for robust Print compatibility)
-                card.style.cssText = 'page-break-inside: avoid; width: 220px; height: 350px; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; position: relative; background: white; display: flex; flex-direction: column; box-sizing: border-box; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px;';
+                // TINGGI FLEKSIBEL (min-height) agar tulisan kelas di bawah tidak terpotong jika nama siswa panjang
+                card.style.cssText = 'page-break-inside: avoid; width: 220px; min-height: 350px; border: 1px solid #cbd5e1; border-radius: 12px; position: relative; background: white; display: flex; flex-direction: column; box-sizing: border-box; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; overflow: visible;';
                 
-                // Header (Dark Red to Bright Red Gradient)
+                // HEADER MERAH TANPA LUBANG LANYARD
                 let header = document.createElement('div');
-                header.style.cssText = 'background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%); color: white; padding: 25px 10px 15px 10px; text-align: center; border-bottom: 4px solid #fca5a5; flex-shrink: 0;';
+                header.style.cssText = 'background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%); color: white; padding: 20px 10px 15px 10px; text-align: center; border-bottom: 4px solid #fca5a5; flex-shrink: 0; border-radius: 12px 12px 0 0;';
                 
                 let logoSrc = appState.settings.mainLogo || 'cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp';
                 header.innerHTML = `
                     <img src="${logoSrc}" style="width: 45px; height: 45px; object-fit: contain; margin: 0 auto 8px auto; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
-                    <div style="font-family: \'Russo One\', sans-serif; font-size: 13px; letter-spacing: 1px; margin-bottom: 2px;">KARTU ABSENSI</div>
+                    <div style="font-family: \'Russo One\', sans-serif; font-size: 14px; letter-spacing: 1px; margin-bottom: 2px;">KARTU ABSENSI</div>
                     <div style="font-size: 10px; font-weight: bold; text-transform: uppercase; opacity: 0.9;">${appState.settings.schoolName || 'SD NEGERI 06 MANADO'}</div>
                 `;
                 
-                // Body (QR + Info)
+                // BODY KARTU
                 let body = document.createElement('div');
-                body.style.cssText = 'flex-grow: 1; padding: 15px 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8fafc;';
+                body.style.cssText = 'flex-grow: 1; padding: 15px 10px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; background: #f8fafc; border-radius: 0 0 12px 12px;';
                 
                 let qrWrapper = document.createElement('div');
                 qrWrapper.id = `qr_${s.id}`;
-                qrWrapper.style.cssText = 'padding: 8px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; margin: 0 auto 15px auto; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.05);';
+                // UKURAN QR CODE sedikit diperkecil agar ruang untuk tulisan KELAS di bawahnya luas
+                qrWrapper.style.cssText = 'padding: 8px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; margin: 0 auto 12px auto; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.05);';
                 
                 let info = document.createElement('div');
-                info.style.cssText = 'line-height: 1.4; width: 100%;';
+                info.style.cssText = 'line-height: 1.3; width: 100%; display: flex; flex-direction: column; align-items: center;';
+                
+                // TULISAN KELAS BINGKAI MERAH PASTI MUNCUL
                 info.innerHTML = `
-                    <div style="font-weight: 900; color: #1e293b; font-size: 15px; margin-bottom: 4px; text-transform: uppercase; word-wrap: break-word;">${s.name}</div>
-                    <div style="font-family: monospace; color: #64748b; font-size: 11px; margin-bottom: 10px;">NISN: ${s.nis}</div>
-                    <div style="background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 4px 16px; border-radius: 20px; font-size: 13px; font-weight: bold; display: inline-block; letter-spacing: 0.5px;">Kelas ${s.class}</div>
+                    <div style="font-weight: 900; color: #1e293b; font-size: 14px; margin-bottom: 4px; text-transform: uppercase; word-wrap: break-word; line-height: 1.2;">${s.name}</div>
+                    <div style="font-family: monospace; color: #64748b; font-size: 11px; margin-bottom: 12px;">NISN: ${s.nis}</div>
+                    <div style="border: 2px solid #dc2626; color: #dc2626; padding: 6px 16px; border-radius: 8px; font-size: 16px; font-weight: 900; letter-spacing: 1px; display: inline-block; background-color: white; text-transform: uppercase;">KELAS ${s.class}</div>
                 `;
                 
                 body.appendChild(qrWrapper);
@@ -1108,11 +1110,10 @@
                 
                 container.appendChild(card);
                 
-                // Generate QR code (Warnanya diubah menjadi merah gelap agar senada)
-                new QRCode(qrWrapper, { text: s.id, width: 120, height: 120, colorDark : "#450a0a", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
+                // Generate QR code ukuran 110x110
+                new QRCode(qrWrapper, { text: s.id, width: 110, height: 110, colorDark : "#7f1d1d", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
             });
 
-            // Wait for QR codes to render before printing
             setTimeout(() => { 
                 window.print(); 
                 setTimeout(() => { 
