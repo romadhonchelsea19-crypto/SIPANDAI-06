@@ -352,7 +352,7 @@
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
-                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-l-4 border-l-blue-500 flex flex-col justify-center relative overflow-hidden group">
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-l-4 border-l-blue-50 flex flex-col justify-center relative overflow-hidden group">
                         <div class="absolute -right-6 -top-6 text-blue-50 opacity-50 group-hover:scale-110 transition-transform"><i class="fas fa-users text-9xl"></i></div>
                         <h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2 relative z-10">Total Siswa</h3>
                         <div class="text-4xl font-black text-slate-800 relative z-10" id="dash-tot-siswa">0</div>
@@ -1114,8 +1114,7 @@
         };
 
         // ==========================================
-        // CETAK ID CARD (5.5cm x 8.8cm STANDAR KTP/PVC)
-        // DESAIN GAGAH & PROPORSIONAL
+        // FUNGSI CETAK KARTU ID - DESAIN MODERN (5.5 x 8.8 cm)
         // ==========================================
         window.printQRCodes = (studentList) => {
             let container = document.getElementById('print-area');
@@ -1131,55 +1130,76 @@
     
             studentList.forEach(s => {
                 let card = document.createElement('div');
-                // Ukuran B1 / KTP (5.5cm x 8.8cm) - Layout Modern
-                card.style.cssText = 'page-break-inside: avoid; width: 5.5cm; height: 8.8cm; border-radius: 8px; position: relative; background: #eff6ff; display: flex; flex-direction: column; box-sizing: border-box; box-shadow: 0 4px 10px rgba(0,0,0,0.15); margin-bottom: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; overflow: hidden; font-family: "Inter", sans-serif; border: 1px solid #cbd5e1;';
+                // UKURAN MUTLAK ID CARD B1 / PVC
+                card.style.cssText = 'page-break-inside: avoid; width: 5.5cm; height: 8.8cm; border-radius: 8px; position: relative; background: #ffffff; display: flex; flex-direction: column; box-sizing: border-box; box-shadow: 0 4px 10px rgba(0,0,0,0.15); margin-bottom: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; overflow: hidden; font-family: "Montserrat", "Inter", sans-serif; border: 1px solid #cbd5e1;';
                 
-                // Header (Merah Gradasi) - Dibuat lebih besar (sekitar 38% dari tinggi kartu)
                 let header = document.createElement('div');
-                header.style.cssText = 'background: linear-gradient(180deg, #b91c1c 0%, #dc2626 100%); color: white; text-align: center; border-bottom: 4px solid #fca5a5; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 3.4cm; box-sizing: border-box; padding: 5px;';
                 
-                let logoSrc = appState.settings.mainLogo || 'cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp';
-                header.innerHTML = `
-                    <img src="${logoSrc}" style="width: 48px; height: 48px; object-fit: contain; margin: 0 auto 4px auto; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));">
-                    <div style="font-family: \'Russo One\', sans-serif; font-size: 15px; letter-spacing: 1px; margin-bottom: 3px; line-height: 1; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">KARTU ABSENSI</div>
-                    <div style="font-family: \'Inter\', sans-serif; font-size: 10px; font-weight: 800; text-transform: uppercase; line-height: 1.1; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">${appState.settings.schoolName || 'SD NEGERI 06 MANADO'}</div>
+                // SIHIR DESAIN MERAH MODERN (3D, GRADASI, LENGKUNGAN & BINTIK DOT MATRIX)
+                let svgBg = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Cdefs%3E%3Cpattern id='dots' width='12' height='12' patternUnits='userSpaceOnUse'%3E%3Ccircle cx='2' cy='2' r='1.5' fill='%23ffffff' fill-opacity='0.15'/%3E%3C/pattern%3E%3ClinearGradient id='bgGrad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23a30000'/%3E%3Cstop offset='100%25' stop-color='%23d90000'/%3E%3C/linearGradient%3E%3ClinearGradient id='wave1' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23ff1a1a'/%3E%3Cstop offset='100%25' stop-color='%23cc0000'/%3E%3C/linearGradient%3E%3ClinearGradient id='wave2' x1='0%25' y1='100%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%23ff0000'/%3E%3Cstop offset='100%25' stop-color='%23990000'/%3E%3C/linearGradient%3E%3Cfilter id='shadow' x='-20%25' y='-20%25' width='140%25' height='140%25'%3E%3CfeDropShadow dx='0' dy='4' stdDeviation='4' flood-color='%23000' flood-opacity='0.5'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='400' height='240' fill='url(%23bgGrad)'/%3E%3Cpath d='M0,0 L200,0 L0,200 Z' fill='url(%23dots)' /%3E%3Cpath d='M200,240 L400,240 L400,0 Z' fill='url(%23dots)' /%3E%3Cpath d='M150,0 C250,50 320,150 400,240 L400,0 Z' fill='%23800000'/%3E%3Cpath d='M200,0 C300,60 360,160 400,240 L400,0 Z' fill='url(%23wave1)' filter='url(%23shadow)'/%3E%3Cpath d='M0,120 C120,150 200,220 350,240 L0,240 Z' fill='%23990000'/%3E%3Cpath d='M0,150 C100,180 180,240 280,240 L0,240 Z' fill='url(%23wave2)' filter='url(%23shadow)'/%3E%3C/svg%3E\")";
+                
+                header.style.cssText = `
+                    background-image: ${svgBg};
+                    background-size: cover;
+                    background-position: center;
+                    border-bottom: 4px solid #ff9999; /* Garis pembatas pink/merah muda */
+                    color: white; 
+                    text-align: center; 
+                    flex-shrink: 0; 
+                    display: flex; 
+                    flex-direction: column; 
+                    align-items: center; 
+                    justify-content: center; 
+                    height: 3.0cm;
+                    box-sizing: border-box; 
+                    padding: 4px;
+                    position: relative;
                 `;
                 
+                let logoSrc = appState.settings.mainLogo || 'cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp';
+                let headerContent = document.createElement('div');
+                headerContent.style.cssText = 'position: relative; z-index: 10; display: flex; flex-direction: column; align-items: center; width: 100%;';
+                
+                // Logo dan Teks (Tebal, Timbul)
+                headerContent.innerHTML = `
+                    <img src="${logoSrc}" style="width: 42px; height: 42px; object-fit: contain; margin: 0 auto 3px auto; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8)); image-rendering: optimize-contrast; image-rendering: -webkit-optimize-contrast;">
+                    <div style="font-family: \'Montserrat\', sans-serif; font-size: 16px; font-weight: 900; letter-spacing: 0.5px; margin-bottom: 1px; line-height: 1.1; text-shadow: 2px 2px 5px rgba(0,0,0,0.9);">KARTU ABSENSI</div>
+                    <div style="font-family: \'Montserrat\', sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; line-height: 1.1; text-shadow: 1px 1px 4px rgba(0,0,0,0.9); letter-spacing: 0.5px;">${appState.settings.schoolName || 'SD NEGERI 06 MANADO'}</div>
+                `;
+                
+                header.appendChild(headerContent);
+                
                 let body = document.createElement('div');
-                body.style.cssText = 'flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; box-sizing: border-box; padding-top: 8px;';
+                body.style.cssText = 'flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; box-sizing: border-box; padding: 5px 8px; background: #f8fafc;';
                 
                 let row = document.createElement('div');
-                row.style.cssText = 'display: flex; justify-content: space-evenly; align-items: center; width: 100%; margin-bottom: 8px; padding: 0 5px; box-sizing: border-box; gap: 5px;';
+                row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; gap: 6px; width: 100%; box-sizing: border-box; padding: 0 2px;';
                 
-                // SISTEM PENYEMBUH FOTO SAAT CETAK
                 let photoSrc = s.photoUrl;
                 if(photoSrc && photoSrc.includes('i.ibb.co') && !photoSrc.includes('wsrv.nl')) {
                     photoSrc = "https://wsrv.nl/?url=" + encodeURIComponent(photoSrc);
                 }
     
                 let validPhoto = photoSrc && (photoSrc.startsWith('http') || photoSrc.startsWith('data:image'));
-                if(!validPhoto) photoSrc = 'https://placehold.co/105x140/e2e8f0/64748b?text=FOTO';
+                if(!validPhoto) photoSrc = 'https://placehold.co/120x160/e2e8f0/64748b?text=FOTO';
                 
-                // Foto - Ukuran ideal berdampingan (2.3cm x 3.1cm)
                 let photoEl = document.createElement('img');
                 photoEl.src = photoSrc;
-                photoEl.style.cssText = 'width: 2.3cm; height: 3.1cm; object-fit: cover; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.15); border: 2px solid white; background: white;';
+                photoEl.style.cssText = 'width: 2.6cm; height: 3.5cm; object-fit: cover; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); border: 2px solid white; background: white;';
                 
-                // QR Kanan - Ukuran sama besar dengan foto
                 let qrWrapper = document.createElement('div');
                 qrWrapper.id = `qr_${s.id}`;
-                qrWrapper.style.cssText = 'padding: 4px; background: white; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; width: 2.4cm; height: 2.4cm; box-sizing: border-box; border: 2px solid white;';
+                qrWrapper.style.cssText = 'padding: 3px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; width: 2.6cm; height: 2.6cm; box-sizing: border-box; border: 2px solid white;';
                 
                 row.appendChild(photoEl);
                 row.appendChild(qrWrapper);
                 
                 let textWrapper = document.createElement('div');
-                // Teks Nama & NISN (Besar & Tegas)
-                textWrapper.style.cssText = 'text-align: center; width: 100%; padding: 0 10px; line-height: 1.3; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; box-sizing: border-box;';
+                textWrapper.style.cssText = 'text-align: center; width: 100%; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; margin-top: 12px;';
                 
                 textWrapper.innerHTML = `
-                    <div style="font-family: \'Inter\', sans-serif; font-weight: 900; color: #0f172a; font-size: 13px; margin-bottom: 3px; text-transform: uppercase; line-height: 1.1;">${s.name}</div>
-                    <div style="font-family: \'Inter\', sans-serif; color: #334155; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">NISN: ${s.nis}</div>
+                    <div style="font-family: \'Montserrat\', sans-serif; font-weight: 900; color: #0f172a; font-size: 11.5px; margin-bottom: 3px; text-transform: uppercase; line-height: 1.1; letter-spacing: -0.3px;">${s.name}</div>
+                    <div style="font-family: \'Montserrat\', sans-serif; color: #475569; font-size: 10.5px; font-weight: 700; letter-spacing: 0.5px; background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">NISN: ${s.nis}</div>
                 `;
                 
                 body.appendChild(row);
@@ -1188,8 +1208,7 @@
                 card.appendChild(body);
                 container.appendChild(card);
                 
-                // Generate QR - ukuran 80x80px agar pas dan tegas
-                new QRCode(qrWrapper, { text: s.id, width: 80, height: 80, colorDark : "#7f1d1d", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
+                new QRCode(qrWrapper, { text: s.id, width: 85, height: 85, colorDark : "#7f1d1d", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
             });
     
             setTimeout(() => { 
