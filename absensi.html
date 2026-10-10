@@ -56,16 +56,14 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
         const appId = 'sipandai-06-36543'; 
         const firebaseConfig = { apiKey: "AIzaSyAxXMEiorBbQoJO2YqW4TWdNm33X0lNsjY", authDomain: "sipandai-06-36543.firebaseapp.com", projectId: "sipandai-06-36543", storageBucket: "sipandai-06-36543.firebasestorage.app", messagingSenderId: "760127633818", appId: "1:760127633818:web:1ae67b75927bc1ed45e223" };
         
-        let app, db, auth, storage;
+        let app, db, auth;
         app = initializeApp(firebaseConfig); 
         db = getFirestore(app); 
         auth = getAuth(app);
-        storage = getStorage(app); 
 
         window.appState = {
             user: null, sidebarOpen: false, students: [], grades: {}, attendance: {}, settings: {}, teachers: [],
@@ -998,7 +996,13 @@
             if (!file) return;
             if (!file.type.match('image.*')) { UI.toast("File harus berupa gambar!", "error"); return; }
             
-            UI.toast("Memproses foto... Tunggu sebentar!", "success");
+            // Kunci layar saat upload agar guru tidak mencet foto lain (Mencegah Spam)
+            const loader = document.getElementById('global-loader');
+            if(loader) {
+                loader.classList.remove('hidden');
+                loader.querySelector('p').innerText = "MENGUNGGAH FOTO... MOHON TUNGGU";
+            }
+            
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
@@ -1019,50 +1023,60 @@
                     
                     canvas.width = MAX_WIDTH; canvas.height = MAX_HEIGHT;
                     const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, MAX_WIDTH, MAX_HEIGHT);
+                    ctx.fillStyle = "#ffffff"; // Hindari background hitam
+                    ctx.fillRect(0, 0, MAX_WIDTH, MAX_HEIGHT);
                     ctx.drawImage(img, (MAX_WIDTH - width) / 2, (MAX_HEIGHT - height) / 2, width, height);
                     
                     const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
                     let finalUrl = null;
 
                     try {
-                        // Coba gunakan kunci API ImgBB yang lebih kuat
-                        let formData = new FormData();
-                        formData.append("key", "64a4bf7329bc4895cae1a62076043fb9"); 
-                        formData.append("image", base64Image);
-                        let res = await fetch("https://api.imgbb.com/1/upload", { method: "POST", body: formData });
-                        let data = await res.json();
-                        
-                        if (data && data.success) { finalUrl = data.data.url; } 
-                        else {
-                            // Coba Kunci Cadangan Kedua jika kunci pertama penuh
-                            formData.set("key", "d3511eb0c5a0db61928a38c234a6ef4e"); 
-                            res = await fetch("https://api.imgbb.com/1/upload", { method: "POST", body: formData });
-                            data = await res.json();
-                            if (data && data.success) finalUrl = data.data.url;
-                            else throw new Error('API Limits Exhausted');
+                        // 3 Kunci Gudang Gambar agar tidak limit
+                        const keys = ["64a4bf7329bc4895cae1a62076043fb9", "d3511eb0c5a0db61928a38c234a6ef4e", "c424c53c070f370884d59f3791a8cb94"];
+                        let uploadSuccess = false;
+
+                        for (let k of keys) {
+                            if(uploadSuccess) break;
+                            try {
+                                let formData = new FormData();
+                                formData.append("key", k); 
+                                formData.append("image", base64Image);
+                                let res = await fetch("https://api.imgbb.com/1/upload", { method: "POST", body: formData });
+                                let data = await res.json();
+                                if (data && data.success) { 
+                                    finalUrl = data.data.url; 
+                                    uploadSuccess = true;
+                                }
+                            } catch(e) {}
                         }
+                        if(!uploadSuccess) throw new Error('Semua Kunci Server Penuh');
                     } catch(err) {
-                        console.warn("Server Penuh, Beralih ke Mode Cadangan Darurat (Aman untuk 374 foto)");
-                        // JIKA SEMUA SERVER INTERNET GAGAL: Kompres foto menjadi super kecil (2KB) 
-                        // dan simpan langsung ke database utama. Sangat aman dan tidak membuat lemot!
+                        console.warn("Beralih ke Kompresi Ekstrem Darurat");
                         const miniCanvas = document.createElement('canvas');
-                        miniCanvas.width = 120; miniCanvas.height = 160;
+                        miniCanvas.width = 90; miniCanvas.height = 120;
                         const miniCtx = miniCanvas.getContext('2d');
-                        miniCtx.drawImage(canvas, 0, 0, 120, 160);
-                        finalUrl = miniCanvas.toDataURL('image/webp', 0.5); 
+                        miniCtx.fillStyle = "#ffffff";
+                        miniCtx.fillRect(0, 0, 90, 120);
+                        miniCtx.drawImage(canvas, 0, 0, 90, 120);
+                        finalUrl = miniCanvas.toDataURL('image/jpeg', 0.4); 
                     }
 
                     if (finalUrl) {
                         const idx = appState.students.findIndex(s => s.id === window.currentUploadStudentId);
                         if(idx !== -1) {
                             appState.students[idx].photoUrl = finalUrl;
-                            saveDataToCloud('students');
-                            loadStudentTable();
+                            await window.saveDataToCloud('students');
+                            window.loadStudentTable();
                             UI.toast("Foto berhasil disimpan!", "success");
                         }
                     } else {
-                        UI.toast("Gagal memproses foto.", "error");
+                        UI.toast("Gagal memproses foto. Periksa sinyal internet.", "error");
+                    }
+                    
+                    // Buka kembali layar loading setelah sukses
+                    if(loader) {
+                        loader.classList.add('hidden');
+                        loader.querySelector('p').innerText = "SINKRONISASI DATABASE...";
                     }
                 };
                 img.src = e.target.result;
@@ -1141,46 +1155,43 @@
 
             studentList.forEach(s => {
                 let card = document.createElement('div');
-                // Rasio Standar ID Card (Lebih Proporsional dan Padat)
-                card.style.cssText = 'page-break-inside: avoid; width: 230px; height: 350px; border: 1px solid #cbd5e1; border-radius: 12px; position: relative; background: #eef2f6; display: flex; flex-direction: column; box-sizing: border-box; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; overflow: hidden;';
+                card.style.cssText = 'page-break-inside: avoid; width: 250px; height: 380px; border: 1px solid #cbd5e1; border-radius: 12px; position: relative; background: #f8fafc; display: flex; flex-direction: column; box-sizing: border-box; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; overflow: hidden; font-family: "Inter", sans-serif;';
                 
                 let header = document.createElement('div');
-                header.style.cssText = 'background: linear-gradient(180deg, #991b1b 0%, #dc2626 100%); color: white; padding: 12px 10px; text-align: center; border-bottom: 5px solid #fca5a5; flex-shrink: 0;';
+                header.style.cssText = 'background: linear-gradient(180deg, #991b1b 0%, #dc2626 100%); color: white; padding: 15px 10px; text-align: center; border-bottom: 6px solid #fca5a5; flex-shrink: 0;';
                 
                 let logoSrc = appState.settings.mainLogo || 'cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp';
                 header.innerHTML = `
-                    <img src="${logoSrc}" style="width: 45px; height: 45px; object-fit: contain; margin: 0 auto 5px auto; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
-                    <div style="font-family: \'Russo One\', sans-serif; font-size: 16px; letter-spacing: 1px; margin-bottom: 2px;">KARTU ABSENSI</div>
-                    <div style="font-family: \'Inter\', sans-serif; font-size: 11px; font-weight: 800; text-transform: uppercase;">${appState.settings.schoolName || 'SD NEGERI 06 MANADO'}</div>
+                    <img src="${logoSrc}" style="width: 50px; height: 50px; object-fit: contain; margin: 0 auto 5px auto; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
+                    <div style="font-family: \'Russo One\', sans-serif; font-size: 18px; letter-spacing: 1px; margin-bottom: 2px;">KARTU ABSENSI</div>
+                    <div style="font-family: \'Inter\', sans-serif; font-size: 12px; font-weight: 800; text-transform: uppercase;">${appState.settings.schoolName || 'SD NEGERI 06 MANADO'}</div>
                 `;
                 
                 let body = document.createElement('div');
-                body.style.cssText = 'flex-grow: 1; padding: 12px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;';
+                body.style.cssText = 'flex-grow: 1; padding: 15px 10px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; background-color: #f8fafc;';
                 
                 let row = document.createElement('div');
-                // Posisi Berdampingan Kiri (Foto) & Kanan (QR)
-                row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 12px; gap: 8px;';
+                // Photo Left, QR Right
+                row.style.cssText = 'display: flex; justify-content: center; align-items: center; width: 100%; margin-bottom: 15px; gap: 12px;';
                 
-                let photoSrc = s.photoUrl || 'https://placehold.co/100x130/e2e8f0/64748b?text=FOTO';
-                
+                let photoSrc = s.photoUrl || 'https://placehold.co/105x140/e2e8f0/64748b?text=FOTO';
                 let photoEl = document.createElement('img');
                 photoEl.src = photoSrc;
-                photoEl.style.cssText = 'width: 90px; height: 115px; object-fit: cover; border-radius: 6px; border: 2px solid white; box-shadow: 0 3px 6px rgba(0,0,0,0.1); background: white;';
+                photoEl.style.cssText = 'width: 105px; height: 140px; object-fit: cover; border-radius: 8px; border: 3px solid white; box-shadow: 0 4px 8px rgba(0,0,0,0.15); background: white;';
                 
                 let qrWrapper = document.createElement('div');
                 qrWrapper.id = `qr_${s.id}`;
-                qrWrapper.style.cssText = 'padding: 4px; background: white; border-radius: 6px; border: 1px solid #e2e8f0; box-shadow: 0 3px 6px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; width: 90px; height: 90px;';
+                qrWrapper.style.cssText = 'padding: 5px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 4px 8px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; width: 105px; height: 105px;';
                 
                 row.appendChild(photoEl);
                 row.appendChild(qrWrapper);
                 
                 let textWrapper = document.createElement('div');
-                // Tulisan ditarik naik menempel di bawah foto
-                textWrapper.style.cssText = 'text-align: center; width: 100%; margin-top: 0px;';
+                textWrapper.style.cssText = 'text-align: center; width: 100%; margin-top: auto; padding-bottom: 5px;';
                 
                 textWrapper.innerHTML = `
-                    <div style="font-family: \'Inter\', sans-serif; font-weight: 900; color: #0f172a; font-size: 14px; margin-bottom: 4px; text-transform: uppercase; line-height: 1.2;">${s.name}</div>
-                    <div style="font-family: monospace; color: #1e293b; font-size: 12px; font-weight: 800;">NISN: ${s.nis}</div>
+                    <div style="font-family: \'Inter\', sans-serif; font-weight: 900; color: #0f172a; font-size: 15px; margin-bottom: 6px; text-transform: uppercase; line-height: 1.2;">${s.name}</div>
+                    <div style="font-family: monospace; color: #1e293b; font-size: 13px; font-weight: 800; letter-spacing: 0.5px;">NISN: ${s.nis}</div>
                 `;
                 
                 body.appendChild(row);
@@ -1191,7 +1202,7 @@
                 container.appendChild(card);
                 
                 // QR Code warna merah marun
-                new QRCode(qrWrapper, { text: s.id, width: 80, height: 80, colorDark : "#7f1d1d", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
+                new QRCode(qrWrapper, { text: s.id, width: 95, height: 95, colorDark : "#7f1d1d", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
             });
 
             setTimeout(() => { 
