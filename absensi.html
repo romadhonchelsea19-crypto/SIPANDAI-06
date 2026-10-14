@@ -416,7 +416,7 @@
                 // ALARM ANTI-MACET: JIKA GAMBAR RUSAK, TAMPILKAN ERROR BUKANNYA DIAM!
                 img.onerror = () => {
                     if(loader) { loader.classList.add('hidden'); loader.querySelector('p').innerText = "MEMUAT DARI CLOUD..."; }
-                    UI.toast("Gagal membaca gambar. File mungkin rusak atau format tidak didukung.", "error");
+                    UI.toast("Gagal membaca gambar. Format tidak didukung/rusak.", "error");
                 };
 
                 img.onload = async () => {
@@ -431,7 +431,16 @@
                     else { if (height > MAX_DIMENSION) { width = Math.round(width * MAX_DIMENSION / height); height = MAX_DIMENSION; } }
 
                     canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, width, height); ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // KHUSUS LOGO: JIKA PNG/TRANSPARAN, KITA BIKIN LATARNYA PUTIH AGAR JADI JPEG SEMPURNA!
+                    if (type === 'kopLogoKiri' || type === 'kopLogoKanan') {
+                        ctx.fillStyle = "#FFFFFF";
+                        ctx.fillRect(0, 0, width, height);
+                    } else {
+                        ctx.clearRect(0, 0, width, height); 
+                    }
+                    
+                    ctx.drawImage(img, 0, 0, width, height);
                     
                     const processUpload = async (base64Data, mime = 'image/png') => {
                         if(loader) loader.querySelector('p').innerText = "☁️ MENGIRIM KE CLOUD...";
@@ -467,7 +476,8 @@
                         if(loader) { loader.classList.add('hidden'); loader.querySelector('p').innerText = "MEMUAT DARI CLOUD..."; }
                     };
 
-                    let mimeType = (type === 'student' || type === 'kopLogoKiri' || type === 'kopLogoKanan') ? 'image/png' : 'image/jpeg';
+                    // PAKSA LOGO JADI JPEG AGAR SUPER RINGAN DAN TIDAK DITOLAK GOOGLE
+                    let mimeType = (type === 'student') ? 'image/png' : 'image/jpeg';
                     let quality = mimeType === 'image/jpeg' ? 0.85 : undefined;
 
                     if (type === 'student') {
@@ -908,7 +918,8 @@
                 <div class="flex flex-col gap-6">
                     <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col">
                         <div class="p-4 bg-yellow-50 border-b border-yellow-100 flex items-center justify-between"><h3 class="font-bold text-yellow-800 uppercase tracking-wide text-sm"><i class="fas fa-exclamation-triangle mr-2"></i> Sering Terlambat (Top 5)</h3></div>
-                        <div class="p-0 overflow-auto max-h-48"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm z-10"><tr><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Total Telat</th></tr></thead><tbody id="dash-table-telat" class="divide-y divide-gray-100"></tbody></table></div>
+                        <!-- KOTAK DIPERBESAR max-h-[400px] AGAR 5 SISWA TERLIHAT SEMUA DENGAN LEGA -->
+                        <div class="p-0 overflow-auto max-h-[400px]"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm z-10"><tr><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Total Telat</th></tr></thead><tbody id="dash-table-telat" class="divide-y divide-gray-100"></tbody></table></div>
                     </div>
                     ${bintangHtml}
                 </div>
