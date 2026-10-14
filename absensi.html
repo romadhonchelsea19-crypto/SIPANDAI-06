@@ -45,7 +45,6 @@
         #sidebar-overlay { z-index: 40; }
 
         @media print {
-            @page { margin: 0; }
             body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; margin: 0; padding: 0; }
             #app-screen, #login-screen { display: none !important; }
             .no-print { display: none !important; }
@@ -59,9 +58,6 @@
             #print-report-area th, #print-report-area td { border: 1px solid black !important; padding: 5px; background: transparent !important; box-shadow: none !important; color: black !important; }
             #print-report-area th { font-weight: bold; background-color: #f3f4f6 !important; text-align: center; }
             #print-report-area .sticky { position: static !important; }
-
-            /* CSS Cetak Piagam Bintang Disiplin */
-            #print-piagam-area { display: flex !important; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; background: white; align-items: center; justify-content: center; overflow: hidden;}
         }
     </style>
 </head>
@@ -87,7 +83,6 @@
 
         window.currentFacingMode = "environment";
         window.currentUploadStudentId = null;
-        window.bintangDisiplinData = null; // Menyimpan data juara bulan ini
 
         const UI = {
             show: (id) => document.getElementById(id)?.classList.remove('hidden'),
@@ -161,7 +156,7 @@
                     if (!appState.settings.namaKepsek) appState.settings.namaKepsek = "";
                     if (!appState.settings.nipKepsek) appState.settings.nipKepsek = "";
                     
-                    // Link SVG Asli & Super Kuat - JANGAN DIRUBAH
+                    // Link SVG Asli & Super Kuat
                     if (!appState.settings.kopLogoKiri) appState.settings.kopLogoKiri = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Lambang_Kota_Manado.svg/512px-Lambang_Kota_Manado.svg.png";
                     if (!appState.settings.kopLogoKanan) appState.settings.kopLogoKanan = "https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg";
 
@@ -416,7 +411,7 @@
                 // ALARM ANTI-MACET: JIKA GAMBAR RUSAK, TAMPILKAN ERROR BUKANNYA DIAM!
                 img.onerror = () => {
                     if(loader) { loader.classList.add('hidden'); loader.querySelector('p').innerText = "MEMUAT DARI CLOUD..."; }
-                    UI.toast("Gagal membaca gambar. Format tidak didukung/rusak.", "error");
+                    UI.toast("Gagal membaca gambar. File mungkin rusak atau format tidak didukung.", "error");
                 };
 
                 img.onload = async () => {
@@ -431,22 +426,13 @@
                     else { if (height > MAX_DIMENSION) { width = Math.round(width * MAX_DIMENSION / height); height = MAX_DIMENSION; } }
 
                     canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d');
-                    
-                    // KHUSUS LOGO: JIKA PNG/TRANSPARAN, KITA BIKIN LATARNYA PUTIH AGAR JADI JPEG SEMPURNA!
-                    if (type === 'kopLogoKiri' || type === 'kopLogoKanan') {
-                        ctx.fillStyle = "#FFFFFF";
-                        ctx.fillRect(0, 0, width, height);
-                    } else {
-                        ctx.clearRect(0, 0, width, height); 
-                    }
-                    
-                    ctx.drawImage(img, 0, 0, width, height);
+                    ctx.clearRect(0, 0, width, height); ctx.drawImage(img, 0, 0, width, height);
                     
                     const processUpload = async (base64Data, mime = 'image/png') => {
                         if(loader) loader.querySelector('p').innerText = "☁️ MENGIRIM KE CLOUD...";
                         let finalUrl = null;
                         
-                        // JALUR 100% IMGBB UNTUK SEMUANYA TERMASUK LOGO TUT WURI (JAMINAN ANTI-DITOLAK)
+                        // JALUR 100% IMGBB UNTUK SEMUANYA
                         try {
                             let apiKeys = [];
                             if (appState.settings.imgbbApiKey && appState.settings.imgbbApiKey.trim() !== "") apiKeys.push(appState.settings.imgbbApiKey.trim());
@@ -462,7 +448,7 @@
                             }
                         } catch(err) {}
                         
-                        // JIKA IMGBB MATI (FALLBACK)
+                        // JIKA IMGBB MATI (FALLBACK BASE64)
                         if (!finalUrl) {
                             finalUrl = `data:${mime};base64,` + base64Data;
                         }
@@ -476,8 +462,7 @@
                         if(loader) { loader.classList.add('hidden'); loader.querySelector('p').innerText = "MEMUAT DARI CLOUD..."; }
                     };
 
-                    // PAKSA LOGO JADI JPEG AGAR SUPER RINGAN DAN TIDAK DITOLAK GOOGLE
-                    let mimeType = (type === 'student') ? 'image/png' : 'image/jpeg';
+                    let mimeType = (type === 'student' || type === 'kopLogoKiri' || type === 'kopLogoKanan') ? 'image/png' : 'image/jpeg';
                     let quality = mimeType === 'image/jpeg' ? 0.85 : undefined;
 
                     if (type === 'student') {
@@ -668,232 +653,8 @@
             }, 500);
         };
 
-        // --- SISTEM CETAK PIAGAM BINTANG DISIPLIN ---
-        window.printPiagamBintang = () => {
-            if (!window.bintangDisiplinData) {
-                UI.toast("Belum ada kandidat juara untuk bulan ini.", "error"); return;
-            }
-
-            const s = window.bintangDisiplinData;
-            
-            let tzoffset = (new Date()).getTimezoneOffset() * 60000;
-            let currentMonthKey = new Date(Date.now() - tzoffset).toISOString().substring(0,7);
-            let [year, month] = currentMonthKey.split('-');
-            let monthName = new Date(year, parseInt(month)-1, 1).toLocaleDateString('id-ID', { month: 'long' });
-
-            let container = document.getElementById('print-piagam-area');
-            if(!container) {
-                container = document.createElement('div');
-                container.id = 'print-piagam-area';
-                container.className = 'hidden no-print';
-                document.body.appendChild(container);
-            }
-
-            let schoolName = appState.settings.schoolName || "SD NEGERI 06 MANADO";
-            let namaKepsek = appState.settings.namaKepsek || ".........................";
-            let nipKepsek = appState.settings.nipKepsek || ".........................";
-            let namaWali = appState.user.role === 'Wali Kelas' ? appState.user.name : ".........................";
-            
-            let logoManado = appState.settings.kopLogoKiri || "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Lambang_Kota_Manado.svg/512px-Lambang_Kota_Manado.svg.png";
-            let logoTutWuri = appState.settings.kopLogoKanan || "https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg";
-            
-            let photoSrc = s.student.photoUrl;
-            let validPhoto = photoSrc && (photoSrc.startsWith('http') || photoSrc.startsWith('data:image'));
-            if(!validPhoto) photoSrc = 'https://placehold.co/300x400/ffffff/64748b?text=FOTO+SISWA';
-
-            let html = `
-                <style>@page { size: A4 landscape; margin: 0; }</style>
-                <div style="width: 100vw; height: 100vh; padding: 2cm; box-sizing: border-box; font-family: 'Times New Roman', Times, serif; background-color: white; position: relative;">
-                    <!-- Bingkai Emas -->
-                    <div style="position: absolute; top: 1cm; left: 1cm; right: 1cm; bottom: 1cm; border: 15px solid #ca8a04; outline: 4px solid #fef08a; outline-offset: -5px; pointer-events: none;"></div>
-                    <div style="position: absolute; top: 1.2cm; left: 1.2cm; right: 1.2cm; bottom: 1.2cm; border: 2px solid #854d0e; pointer-events: none;"></div>
-
-                    <div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; z-index: 10;">
-                        <!-- Header Logos -->
-                        <div style="display: flex; justify-content: space-between; width: 100%; padding: 0 2cm; margin-bottom: 20px;">
-                            <img src="${logoManado}" style="height: 100px; width: 100px; object-fit: contain;">
-                            <img src="${logoTutWuri}" style="height: 100px; width: 100px; object-fit: contain;">
-                        </div>
-
-                        <!-- Titles -->
-                        <h2 style="font-size: 24px; color: #374151; margin: 0; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">${schoolName}</h2>
-                        <h1 style="font-size: 56px; color: #ca8a04; margin: 15px 0; font-family: 'Georgia', serif; font-weight: 900; letter-spacing: 4px; text-shadow: 2px 2px 4px rgba(0,0,0,0.1);">PIAGAM PENGHARGAAN</h1>
-                        <p style="font-size: 20px; color: #4b5563; margin: 0; font-style: italic;">Diberikan dengan rasa bangga kepada:</p>
-
-                        <!-- Student Info -->
-                        <div style="display: flex; flex-direction: column; align-items: center; margin: 30px 0;">
-                            <div style="width: 120px; height: 140px; border: 4px solid #ca8a04; padding: 3px; background: white; margin-bottom: 15px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);">
-                                <img src="${photoSrc}" style="width: 100%; height: 100%; object-fit: contain;">
-                            </div>
-                            <h2 style="font-size: 42px; color: #1f2937; margin: 0; font-weight: bold; border-bottom: 2px solid #ca8a04; padding-bottom: 5px;">${s.student.name}</h2>
-                            <p style="font-size: 18px; color: #6b7280; margin: 10px 0 0 0; font-weight: bold;">NISN: ${s.student.nis} | KELAS: ${s.student.class}</p>
-                        </div>
-
-                        <!-- Achievement -->
-                        <p style="font-size: 22px; color: #374151; text-align: center; max-width: 80%; line-height: 1.5; margin: 0;">
-                            Atas prestasi dan teladan yang luar biasa sebagai<br>
-                            <b style="color: #b45309; font-size: 26px;">BINTANG DISIPLIN (KEHADIRAN 100%)</b><br>
-                            Sepanjang Bulan <b>${monthName.toUpperCase()} ${year}</b>.
-                        </p>
-
-                        <!-- Signatures -->
-                        <div style="display: flex; justify-content: space-between; width: 85%; margin-top: auto; padding-bottom: 20px;">
-                            <div style="text-align: center;">
-                                <p style="font-size: 16px; margin: 0 0 70px 0; color: #374151;">Mengetahui,<br>Kepala Sekolah</p>
-                                <p style="font-size: 18px; margin: 0; font-weight: bold; text-decoration: underline; color: #111827;">${namaKepsek}</p>
-                                <p style="font-size: 14px; margin: 5px 0 0 0; color: #4b5563;">NIP. ${nipKepsek}</p>
-                            </div>
-                            <!-- Seal Placeholder -->
-                            <div style="width: 100px; height: 100px; border: 2px dashed #d1d5db; border-radius: 50%; display: flex; align-items: center; justify-content: center; opacity: 0.5;">
-                                <span style="font-size: 12px; color: #9ca3af; text-align: center;">STEMPEL<br>SEKOLAH</span>
-                            </div>
-                            <div style="text-align: center;">
-                                <p style="font-size: 16px; margin: 0 0 70px 0; color: #374151;">Manado, ${new Date().getDate()} ${monthName} ${year}<br>Wali Kelas</p>
-                                <p style="font-size: 18px; margin: 0; font-weight: bold; text-decoration: underline; color: #111827;">${namaWali}</p>
-                                <p style="font-size: 14px; margin: 5px 0 0 0; color: #4b5563;">Guru Kelas ${s.student.class}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            container.innerHTML = html;
-            container.classList.remove('hidden', 'no-print');
-
-            setTimeout(() => {
-                window.print();
-                setTimeout(() => {
-                    container.classList.add('hidden', 'no-print');
-                    container.innerHTML = '';
-                }, 1000);
-            }, 500);
-        };
-
-        // --- FUNGSI MENGHITUNG KANDIDAT BINTANG DISIPLIN ---
-        window.calculateBintangDisiplin = () => {
-            if (!appState.attendance || !appState.students || appState.students.length === 0) return null;
-            
-            let tzoffset = (new Date()).getTimezoneOffset() * 60000;
-            let currentMonthKey = new Date(Date.now() - tzoffset).toISOString().substring(0,7); // e.g., "2023-10"
-            
-            // Hitung total hari aktif yang sudah lewat di bulan ini
-            const attSettings = appState.settings.attendance || { workDays: [1,2,3,4,5], holidays: [] };
-            let totalActiveDays = 0;
-            let today = new Date(Date.now() - tzoffset);
-            
-            for(let i=1; i<=today.getDate(); i++) {
-                let d = new Date(today.getFullYear(), today.getMonth(), i);
-                let dateStrKey = `${currentMonthKey}-${i.toString().padStart(2,'0')}`;
-                let dayOfWeek = d.getDay();
-                if (attSettings.workDays.includes(dayOfWeek) && !attSettings.holidays.includes(dateStrKey)) {
-                    // Cek apakah ada record absensi di hari ini (menghindari hari libur mendadak yang belum diinput)
-                    if (appState.attendance[dateStrKey] && Object.keys(appState.attendance[dateStrKey]).length > 0) {
-                        totalActiveDays++;
-                    }
-                }
-            }
-
-            if (totalActiveDays === 0) return null; // Belum ada data absen bulan ini
-
-            let candidates = [];
-
-            // Filter siswa berdasarkan kelas (jika wali kelas)
-            let targetStds = appState.students;
-            if (appState.user && appState.user.role === 'Wali Kelas') {
-                targetStds = appState.students.filter(s => s.class === appState.user.assignedClass);
-            }
-
-            targetStds.forEach(student => {
-                let countHadir = 0;
-                let totalMinutes = 0; // Untuk menghitung rata-rata kedatangan
-                let isPerfect = true;
-
-                for(let i=1; i<=today.getDate(); i++) {
-                    let d = new Date(today.getFullYear(), today.getMonth(), i);
-                    let dateStrKey = `${currentMonthKey}-${i.toString().padStart(2,'0')}`;
-                    let dayOfWeek = d.getDay();
-                    
-                    if (attSettings.workDays.includes(dayOfWeek) && !attSettings.holidays.includes(dateStrKey)) {
-                        // Hanya hitung hari yang memang ada record absensinya
-                         if (appState.attendance[dateStrKey] && Object.keys(appState.attendance[dateStrKey]).length > 0) {
-                            if (appState.attendance[dateStrKey][student.id]) {
-                                let record = appState.attendance[dateStrKey][student.id];
-                                if (record.status === 'Hadir') {
-                                    countHadir++;
-                                    // Hitung menit (07:15 -> 7*60 + 15)
-                                    if(record.time) {
-                                        let [h, m] = record.time.split(':');
-                                        totalMinutes += (parseInt(h) * 60 + parseInt(m));
-                                    }
-                                } else {
-                                    isPerfect = false; break; // Gugur jika ada Telat/S/I/A
-                                }
-                            } else {
-                                isPerfect = false; break; // Gugur jika belum diabsen di hari aktif
-                            }
-                         }
-                    }
-                }
-
-                if (isPerfect && countHadir === totalActiveDays && countHadir > 0) {
-                    let avgMinutes = totalMinutes / countHadir;
-                    candidates.push({ student: student, avgMinutes: avgMinutes, countHadir: countHadir });
-                }
-            });
-
-            if (candidates.length === 0) return null;
-
-            // Sortir berdasarkan rata-rata kedatangan paling pagi
-            candidates.sort((a, b) => a.avgMinutes - b.avgMinutes);
-            return candidates[0]; // Juara 1
-        };
-
         function renderDashboard() {
             let infoDesc = appState.user.role === 'Wali Kelas' ? `Pantauan Kelas ${appState.user.assignedClass}` : 'Pantauan Seluruh Sekolah';
-            
-            // Hitung Kandidat Juara
-            window.bintangDisiplinData = calculateBintangDisiplin();
-            
-            let bintangHtml = '';
-            if (window.bintangDisiplinData) {
-                let s = window.bintangDisiplinData.student;
-                let h = Math.floor(window.bintangDisiplinData.avgMinutes / 60);
-                let m = Math.round(window.bintangDisiplinData.avgMinutes % 60);
-                let avgTimeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-                let photoSrc = s.photoUrl && s.photoUrl.startsWith('http') ? s.photoUrl : 'https://placehold.co/150x200/ffffff/ca8a04?text=Bintang';
-                
-                bintangHtml = `
-                <div class="bg-gradient-to-br from-yellow-100 via-yellow-50 to-white rounded-2xl shadow-md border-2 border-yellow-300 overflow-hidden flex flex-col relative group">
-                    <div class="absolute -right-4 -top-4 text-yellow-200 opacity-30 group-hover:scale-110 transition-transform"><i class="fas fa-medal text-9xl"></i></div>
-                    <div class="p-4 bg-gradient-to-r from-yellow-500 to-yellow-600 flex items-center justify-between shadow-sm relative z-10">
-                        <h3 class="font-black text-white uppercase tracking-wider text-sm text-shadow-sm"><i class="fas fa-trophy mr-2 text-yellow-200"></i> Kandidat Bintang Bulan Ini</h3>
-                    </div>
-                    <div class="p-5 flex flex-col sm:flex-row items-center gap-5 relative z-10">
-                        <img src="${photoSrc}" class="w-20 h-28 object-contain rounded-lg border-2 border-yellow-400 p-1 bg-white shadow-md">
-                        <div class="text-center sm:text-left flex-1">
-                            <h4 class="text-lg font-black text-slate-800 uppercase leading-tight mb-1">${s.name}</h4>
-                            <p class="text-xs font-bold text-gray-500 mb-3">Kelas: <span class="text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded">${s.class}</span></p>
-                            <div class="flex flex-wrap gap-2 justify-center sm:justify-start">
-                                <span class="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-1 rounded-md font-bold shadow-sm"><i class="fas fa-check-circle mr-1"></i> Hadir 100%</span>
-                                <span class="text-[10px] bg-blue-100 text-blue-800 border border-blue-200 px-2 py-1 rounded-md font-bold shadow-sm" title="Rata-rata jam kedatangan"><i class="fas fa-clock mr-1"></i> Rata-rata pkl ${avgTimeStr}</span>
-                            </div>
-                        </div>
-                        <button onclick="printPiagamBintang()" class="bg-yellow-500 hover:bg-yellow-600 text-white w-full sm:w-auto px-4 py-3 rounded-xl font-bold shadow-lg transition transform hover:scale-105 flex flex-col items-center justify-center gap-1 text-xs shrink-0 border border-yellow-400">
-                            <i class="fas fa-print text-lg"></i> Cetak Piagam
-                        </button>
-                    </div>
-                </div>
-                `;
-            } else {
-                bintangHtml = `
-                <div class="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-6 flex flex-col items-center justify-center text-center h-full min-h-[160px]">
-                    <i class="fas fa-medal text-4xl text-slate-300 mb-3"></i>
-                    <h3 class="font-bold text-slate-500 text-sm">Bintang Disiplin</h3>
-                    <p class="text-xs text-slate-400 mt-1 max-w-[250px]">Belum ada kandidat yang mencapai kehadiran 100% tepat waktu bulan ini.</p>
-                </div>
-                `;
-            }
-
             let content = `
             <div class="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div><h2 class="text-2xl md:text-3xl font-black text-slate-800 font-russo tracking-wide">Dasbor Kehadiran <span class="text-emerald-500">Hari Ini</span></h2><p class="text-gray-500 font-bold tracking-wide text-sm mt-1 uppercase"><i class="fas fa-globe text-blue-500 mr-1"></i> ${infoDesc}</p></div>
@@ -905,7 +666,7 @@
                 <div class="bg-white rounded-2xl p-5 shadow-sm border border-l-4 border-l-emerald-500 flex flex-col justify-center relative overflow-hidden group"><div class="absolute -right-6 -top-6 text-emerald-50 opacity-50 group-hover:scale-110 transition-transform"><i class="fas fa-check-circle text-8xl"></i></div><h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2 relative z-10">Hadir Tepat Waktu</h3><div class="text-3xl font-black text-emerald-600 relative z-10" id="dash-tot-hadir">0 <span class="text-xs font-bold text-gray-400" id="dash-pct-hadir">(0%)</span></div></div>
                 <div class="bg-white rounded-2xl p-5 shadow-sm border border-l-4 border-l-yellow-500 flex flex-col justify-center relative overflow-hidden group"><div class="absolute -right-6 -top-6 text-yellow-50 opacity-50 group-hover:scale-110 transition-transform"><i class="fas fa-clock text-8xl"></i></div><h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2 relative z-10">Terlambat Datang</h3><div class="text-3xl font-black text-yellow-600 relative z-10" id="dash-tot-telat">0 <span class="text-xs font-bold text-gray-400" id="dash-pct-telat">(0%)</span></div></div>
                 <div class="bg-white rounded-2xl p-5 shadow-sm border border-l-4 border-l-purple-500 flex flex-col justify-center relative overflow-hidden group"><div class="absolute -right-6 -top-6 text-purple-50 opacity-50 group-hover:scale-110 transition-transform"><i class="fas fa-notes-medical text-8xl"></i></div><h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2 relative z-10">Sakit / Izin / Alpa</h3><div class="text-3xl font-black text-purple-600 relative z-10" id="dash-tot-sia">0</div><div class="text-[11px] font-bold text-gray-500 mt-1 relative z-10" id="dash-detail-sia">S: 0 | I: 0 | A: 0</div></div>
-                <div class="bg-white rounded-2xl p-5 shadow-sm border border-l-4 border-l-slate-400 flex flex-col justify-center relative overflow-hidden group"><div class="absolute -right-6 -top-6 text-slate-50 opacity-50 group-hover:scale-110 transition-transform"><i class="fas fa-user-clock text-8xl"></i></div><h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2 relative z-10">Belum Diabsen</h3><div class="text-3xl font-black text-slate-600 relative z-10" id="dash-tot-belum">0</div></div>
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-l-4 border-l-red-500 flex flex-col justify-center relative overflow-hidden group"><div class="absolute -right-6 -top-6 text-red-50 opacity-50 group-hover:scale-110 transition-transform"><i class="fas fa-user-clock text-8xl"></i></div><h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2 relative z-10">Belum Diabsen</h3><div class="text-3xl font-black text-red-600 relative z-10" id="dash-tot-belum">0</div></div>
             </div>
             
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -914,26 +675,19 @@
             </div>
             
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
-                <!-- Kolom Kiri: Telat & Bintang -->
-                <div class="flex flex-col gap-6">
-                    <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col">
-                        <div class="p-4 bg-yellow-50 border-b border-yellow-100 flex items-center justify-between"><h3 class="font-bold text-yellow-800 uppercase tracking-wide text-sm"><i class="fas fa-exclamation-triangle mr-2"></i> Sering Terlambat (Top 5)</h3></div>
-                        <!-- KOTAK DIPERBESAR max-h-[400px] AGAR 5 SISWA TERLIHAT SEMUA DENGAN LEGA -->
-                        <div class="p-0 overflow-auto max-h-[400px]"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm z-10"><tr><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Total Telat</th></tr></thead><tbody id="dash-table-telat" class="divide-y divide-gray-100"></tbody></table></div>
-                    </div>
-                    ${bintangHtml}
+                <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col">
+                    <div class="p-4 bg-yellow-50 border-b border-yellow-100 flex items-center justify-between"><h3 class="font-bold text-yellow-800 uppercase tracking-wide text-sm"><i class="fas fa-exclamation-triangle mr-2"></i> Sering Terlambat (Top 5)</h3></div>
+                    <div class="p-0 overflow-auto max-h-64"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm z-10"><tr><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Total Telat</th></tr></thead><tbody id="dash-table-telat" class="divide-y divide-gray-100"></tbody></table></div>
                 </div>
                 
-                <!-- Kolom Tengah: Rawan Alpa -->
                 <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col">
                     <div class="p-4 bg-purple-50 border-b border-purple-100 flex items-center justify-between"><h3 class="font-bold text-purple-800 uppercase tracking-wide text-sm"><i class="fas fa-exclamation-circle mr-2"></i> Rawan Alpa (Bulan Ini)</h3></div>
-                    <div class="p-0 overflow-auto max-h-[350px]"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm z-10"><tr><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Alpa</th><th class="p-3 text-center">Aksi</th></tr></thead><tbody id="dash-table-alpa" class="divide-y divide-gray-100"></tbody></table></div>
+                    <div class="p-0 overflow-auto max-h-64"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm z-10"><tr><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Alpa</th><th class="p-3 text-center">Aksi</th></tr></thead><tbody id="dash-table-alpa" class="divide-y divide-gray-100"></tbody></table></div>
                 </div>
 
-                <!-- Kolom Kanan: Belum Absen -->
                 <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col">
-                    <div class="p-4 bg-slate-100 border-b border-slate-200 flex items-center justify-between"><h3 class="font-bold text-slate-700 uppercase tracking-wide text-sm"><i class="fas fa-user-clock mr-2"></i> Belum Diabsen</h3><span class="text-[10px] bg-slate-200 text-slate-700 px-2 py-1 rounded-full font-bold shadow-sm" id="dash-badge-belum">0 Siswa</span></div>
-                    <div class="p-0 overflow-auto max-h-[350px]"><table class="w-full text-sm text-left"><thead class="bg-white text-slate-400 text-xs sticky top-0 shadow-sm z-10 border-b"><tr><th class="p-3 uppercase">Nama Siswa</th><th class="p-3 text-center uppercase">Kelas</th></tr></thead><tbody id="dash-table-belum" class="divide-y divide-gray-50"></tbody></table></div>
+                    <div class="p-4 bg-red-50 border-b border-red-100 flex items-center justify-between"><h3 class="font-bold text-red-800 uppercase tracking-wide text-sm"><i class="fas fa-user-clock mr-2"></i> Belum Diabsen</h3><span class="text-[10px] bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold" id="dash-badge-belum">0 Siswa</span></div>
+                    <div class="p-0 overflow-auto max-h-64"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm z-10"><tr><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Kelas</th></tr></thead><tbody id="dash-table-belum" class="divide-y divide-gray-100"></tbody></table></div>
                 </div>
             </div>`;
             UI.html('view-dashboard', content);
@@ -970,12 +724,12 @@
             const elDetSia = document.getElementById('dash-detail-sia'); if(elDetSia) elDetSia.innerText = `S: ${countSakit} | I: ${countIzin} | A: ${countAlpa}`;
             document.getElementById('dash-tot-belum').innerText = countBelum; 
 
-            // TABEL BELUM ABSEN (MURNI TANPA SIA)
+            // TABEL BELUM ABSEN
             let htmlBelum = '';
             belumAbsenList.sort((a,b) => a.student.class.localeCompare(b.student.class) || a.student.name.localeCompare(b.student.name)).forEach((item, i) => {
-                htmlBelum += `<tr class="hover:bg-slate-50"><td class="p-3 font-semibold text-gray-600 text-xs">${item.student.name}</td><td class="p-3 text-center"><span class="bg-slate-100 border px-2 py-0.5 rounded text-[10px] font-bold text-slate-500">${item.student.class}</span></td></tr>`;
+                htmlBelum += `<tr class="hover:bg-slate-50"><td class="p-3 font-semibold text-gray-700 text-xs">${item.student.name}</td><td class="p-3 text-center"><span class="bg-gray-100 border px-2 py-0.5 rounded text-[10px] font-bold">${item.student.class}</span></td></tr>`;
             });
-            if(htmlBelum === '') htmlBelum = `<tr><td colspan="2" class="p-8 text-center"><div class="text-emerald-500 mb-2"><i class="fas fa-check-circle text-4xl"></i></div><div class="font-bold text-slate-600 text-sm">Semua siswa sudah diabsen!</div></td></tr>`;
+            if(htmlBelum === '') htmlBelum = `<tr><td colspan="2" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50"><i class="fas fa-check-circle mr-1"></i> Semua siswa sudah diabsen!</td></tr>`;
             document.getElementById('dash-table-belum').innerHTML = htmlBelum; 
             document.getElementById('dash-badge-belum').innerText = `${countBelum} Siswa`;
 
@@ -1017,7 +771,7 @@
             const ctx1 = document.getElementById('dashAbsenChart1'); if(ctx1) { window.chartInstance1 = new Chart(ctx1, { type: 'line', data: { labels: labels7Days, datasets: [{ label: '% Kehadiran', data: dataHadir7Days, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.2)', borderWidth: 3, tension: 0.4, fill: true, pointBackgroundColor: '#ffffff', pointBorderColor: '#3b82f6', pointBorderWidth: 2, pointRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, ticks: { callback: function(value){ return value + '%' } } } } } }); }
             if(window.chartInstance2) window.chartInstance2.destroy();
             const ctx2 = document.getElementById('dashAbsenChart2');
-            if(isWali && ctx2) { document.getElementById('title-chart-2').innerHTML = `<i class="fas fa-chart-pie text-emerald-500 mr-2"></i> Distribusi Status Hari Ini`; window.chartInstance2 = new Chart(ctx2, { type: 'doughnut', data: { labels: ['Hadir Tepat', 'Terlambat', 'Sakit/Izin/Alpa', 'Belum Absen'], datasets: [{ data: [countHadir, countTelat, countSIA, countBelum], backgroundColor: ['#10b981', '#eab308', '#a855f7', '#cbd5e1'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'right' } } } }); } 
+            if(isWali && ctx2) { document.getElementById('title-chart-2').innerHTML = `<i class="fas fa-chart-pie text-emerald-500 mr-2"></i> Distribusi Status Hari Ini`; window.chartInstance2 = new Chart(ctx2, { type: 'doughnut', data: { labels: ['Hadir Tepat', 'Terlambat', 'Sakit/Izin/Alpa', 'Belum Absen'], datasets: [{ data: [countHadir, countTelat, countSIA, countBelum], backgroundColor: ['#10b981', '#eab308', '#ef4444', '#cbd5e1'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'right' } } } }); } 
             else if (ctx2) { let classLabels = [...new Set(targetStds.map(s => s.class))].sort(); let classData = []; classLabels.forEach(c => { let stdsInClass = targetStds.filter(s => s.class === c); let hInClass = 0; if(appState.attendance[todayKey]) { stdsInClass.forEach(s => { if(appState.attendance[todayKey][s.id]) { let st = appState.attendance[todayKey][s.id].status; if(st === 'Hadir' || st === 'Terlambat') hInClass++; } }); } classData.push(stdsInClass.length > 0 ? Math.round((hInClass/stdsInClass.length)*100) : 0); }); window.chartInstance2 = new Chart(ctx2, { type: 'bar', data: { labels: classLabels, datasets: [{ label: '% Hadir', data: classData, backgroundColor: '#10b981', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, ticks: { callback: function(value){ return value + '%' } } } } } }); }
         };
 
@@ -1147,22 +901,23 @@
             if (phone.startsWith('0')) phone = '62' + phone.substring(1);
             let dateFormatted = new Date(dateKey).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
             
+            let isAlpa = statusType === 'Alpa';
             let message = '';
-            let boxTheme = ''; let iconTheme = ''; let nameTheme = ''; let statusTheme = ''; let statusLabel = ''; let closeBtnTheme = '';
-
-            if (statusType === 'Alpa') {
+            if (isAlpa) {
                 message = `*PEMBERITAHUAN KETIDAKHADIRAN (ALPA)*\n\nYth. Orang Tua/Wali dari *${student.name}*,\n\nKami menginformasikan bahwa pada *${dateFormatted}*, ananda tercatat *TIDAK HADIR TANPA KETERANGAN (ALPA)* di sekolah.\n\nMohon konfirmasi dan kerja sama Bapak/Ibu untuk memantau kehadiran ananda. Apabila ananda berhalangan hadir karena sakit atau keperluan izin, mohon kiranya dapat menginformasikan kepada Wali Kelas. Terima kasih.\n\n_Sistem Absensi ${appState.settings.schoolName}_`;
-                boxTheme = 'bg-red-50 border-red-400'; iconTheme = 'fa-user-times text-red-500'; nameTheme = 'text-red-900'; statusTheme = 'text-red-600'; statusLabel = 'ALPA (TANPA KETERANGAN)'; closeBtnTheme = 'border-red-400 hover:bg-red-100 text-red-800';
-            } else if (statusType === 'Sakit') {
-                message = `*PEMBERITAHUAN KETIDAKHADIRAN (SAKIT)*\n\nYth. Orang Tua/Wali dari *${student.name}*,\n\nKami telah mencatat keterangan ketidakhadiran ananda pada hari ini, *${dateFormatted}*, karena *SAKIT*.\n\nSemoga ananda diberikan kesembuhan yang cepat dan sempurna, agar dapat kembali beraktivitas, belajar, dan bermain bersama teman-teman di sekolah. Aamiin.\n\n_Doa dari Wali Kelas & Sistem Absensi ${appState.settings.schoolName}_`;
-                boxTheme = 'bg-blue-50 border-blue-400'; iconTheme = 'fa-procedures text-blue-500'; nameTheme = 'text-blue-900'; statusTheme = 'text-blue-600'; statusLabel = 'SEMOGA LEKAS SEMBUH'; closeBtnTheme = 'border-blue-400 hover:bg-blue-100 text-blue-800';
             } else {
                 message = `*PEMBERITAHUAN KEHADIRAN*\n\nYth. Orang Tua/Wali dari *${student.name}*,\n\nKami menginformasikan bahwa pada *${dateFormatted}*, ananda tercatat hadir di sekolah pada pukul *${timeStr} WITA* dengan status kehadiran: *TERLAMBAT*.\n\nMohon bimbingan di rumah agar ananda dapat berangkat lebih awal. Terima kasih.\n\n_Sistem Absensi ${appState.settings.schoolName}_`;
-                boxTheme = 'bg-yellow-50 border-yellow-400'; iconTheme = 'fa-exclamation-triangle text-yellow-500'; nameTheme = 'text-yellow-900'; statusTheme = 'text-yellow-600'; statusLabel = 'TERLAMBAT'; closeBtnTheme = 'border-yellow-400 hover:bg-yellow-100 text-yellow-800';
             }
 
             let waLink = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : '#';
             let waBtnClass = phone ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl' : 'bg-gray-300 text-gray-500 cursor-not-allowed';
+
+            let boxTheme = isAlpa ? 'bg-red-50 border-red-400' : 'bg-yellow-50 border-yellow-400';
+            let iconTheme = isAlpa ? 'fa-user-times text-red-500' : 'fa-exclamation-triangle text-yellow-500';
+            let nameTheme = isAlpa ? 'text-red-900' : 'text-yellow-900';
+            let statusTheme = isAlpa ? 'text-red-600' : 'text-yellow-600';
+            let statusLabel = isAlpa ? 'ALPA (TANPA KETERANGAN)' : 'TERLAMBAT';
+            let closeBtnTheme = isAlpa ? 'border-red-400 hover:bg-red-100 text-red-800' : 'border-yellow-400 hover:bg-yellow-100 text-yellow-800';
 
             const modal = document.createElement('div');
             modal.id = 'manual-wa-modal';
@@ -1195,14 +950,10 @@
             try { if(status === 'Hapus') { delete appState.attendance[dateKey][sId]; await updateDoc(docRef, { [`attendance.${dateKey}.${sId}`]: deleteField() }); } else { appState.attendance[dateKey][sId] = { status: status, time: timeStr, manual: true }; await updateDoc(docRef, { [`attendance.${dateKey}.${sId}`]: { status: status, time: timeStr, manual: true } }); } } catch(e) { saveDataToCloud('attendance'); }
             loadManualTable(); 
             
-            if (status === 'Terlambat' || status === 'Alpa' || status === 'Sakit') {
+            if (status === 'Terlambat' || status === 'Alpa') {
                 const student = appState.students.find(s => s.id === sId);
                 const userSound = appState.settings.attendance?.scanSound || 'voice';
-                
-                let voiceAlert = 'Siswa Terlambat';
-                if (status === 'Alpa') voiceAlert = 'Siswa Alpa';
-                if (status === 'Sakit') voiceAlert = 'Semoga Lekas Sembuh';
-
+                const voiceAlert = status === 'Alpa' ? 'Siswa Alpa' : 'Siswa Terlambat';
                 UI.playBeep(userSound === 'voice' ? 'voice' : 'error', voiceAlert);
                 if (student) showManualWaNotificationModal(student, status, timeStr, dateKey);
             } else {
@@ -1282,11 +1033,11 @@
             UI.html('preview-bg-front', `<img src="${defFront}" class="w-full object-contain rounded border shadow-sm mx-auto mb-2 bg-white" style="max-height: 250px;">`); 
             UI.html('preview-bg-back', `<img src="${defBack}" class="w-full object-contain rounded border shadow-sm mx-auto mb-2 bg-white" style="max-height: 250px;">`);
             
-            // LOGO DENGAN ALARM ONERROR JIKA RUSAK/TERBLOKIR
+            // LOGO DENGAN ALARM ONERROR JIKA RUSAK
             let defLogoKiri = appState.settings.kopLogoKiri || 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Lambang_Kota_Manado.svg/512px-Lambang_Kota_Manado.svg.png';
             let defLogoKanan = appState.settings.kopLogoKanan || 'https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg';
-            UI.html('preview-logo-kiri', `<img src="${defLogoKiri}" onerror="this.onerror=null; this.src='https://placehold.co/200x200/fee2e2/ef4444?text=BLOKIR+JARINGAN';" class="w-24 h-24 object-contain rounded border bg-white shadow-sm p-1">`); 
-            UI.html('preview-logo-kanan', `<img src="${defLogoKanan}" onerror="this.onerror=null; this.src='https://placehold.co/200x200/fee2e2/ef4444?text=BLOKIR+JARINGAN';" class="w-24 h-24 object-contain rounded border bg-white shadow-sm p-1">`);
+            UI.html('preview-logo-kiri', `<img src="${defLogoKiri}" onerror="this.onerror=null; this.src='https://placehold.co/200x200/fee2e2/ef4444?text=LOGO+RUSAK';" class="w-24 h-24 object-contain rounded border bg-white shadow-sm p-1">`); 
+            UI.html('preview-logo-kanan', `<img src="${defLogoKanan}" onerror="this.onerror=null; this.src='https://placehold.co/200x200/fee2e2/ef4444?text=LOGO+RUSAK';" class="w-24 h-24 object-contain rounded border bg-white shadow-sm p-1">`);
         };
 
         // --- FUNGSI RESET LOGO BAWAAN YANG SUPER KUAT ---
@@ -1340,9 +1091,6 @@
     
     <!-- AREA CETAK LAPORAN RESMI -->
     <div id="print-report-area" class="hidden no-print text-center p-4"></div>
-
-    <!-- AREA CETAK PIAGAM BINTANG DISIPLIN -->
-    <div id="print-piagam-area" class="hidden no-print text-center"></div>
     
     <!-- UPLOAD FOTO SISWA -->
     <input type="file" id="student-photo-upload" accept="image/png, image/jpeg" class="hidden" onchange="handleImageUpload(event, 'student')">
