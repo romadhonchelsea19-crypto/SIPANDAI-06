@@ -9,13 +9,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700&family=Russo+One&display=swap" rel="stylesheet">
     
-    <!-- LIBRARIES UTAMA -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- MESIN AI GOOGLE MEDIAPIPE (SUPER RINGAN & ANTI GAGAL) -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
     
     <script>
@@ -49,10 +46,9 @@
             #app-screen, #login-screen { display: none !important; }
             .no-print { display: none !important; }
             
-            #print-area { display: flex !important; flex-wrap: wrap; justify-content: center; gap: 15px; position: absolute; left: 0; top: 0; width: 100%; padding: 10px; background: white; }
+            #print-area { display: flex !important; flex-wrap: wrap; justify-content: center; gap: 15px; position: absolute; left: 0; top: 0; width: 100%; padding: 10px; background: white; z-index: 999999; }
             
-            /* CSS Cetak Laporan Resmi */
-            #print-report-area { display: block !important; position: absolute; top: 0; left: 0; width: 100%; z-index: 9999; background: white; padding: 0; }
+            #print-report-area { display: block !important; position: absolute; top: 0; left: 0; width: 100%; z-index: 999999; background: white; padding: 0; }
             #print-report-area * { color: black !important; }
             #print-report-area table { border-collapse: collapse; width: 100%; font-size: 11px; margin-top: 15px; }
             #print-report-area th, #print-report-area td { border: 1px solid black !important; padding: 5px; background: transparent !important; box-shadow: none !important; color: black !important; }
@@ -127,22 +123,22 @@
         }
 
         function listenToCloudDatabase() {
+            // 1. Dengarkan Buku Utama (Data Siswa & Absensi)
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
             onSnapshot(docRef, (snap) => {
                 UI.hide('global-loader');
                 if (snap.exists()) {
                     const data = snap.data();
                     appState.students = data.students || [];
-                    appState.settings = data.settings || {};
                     
-                    let isDirty = false;
-                    appState.students.forEach(s => {
-                        if (s.photoUrl) {
-                            if (s.photoUrl === "undefined" || (!s.photoUrl.startsWith('http') && !s.photoUrl.startsWith('data:image'))) { s.photoUrl = ""; isDirty = true; }
+                    if (!appState.settings) appState.settings = {};
+                    // Hanya salin setting dari buku utama (kecuali desain kartu yang dipisah)
+                    let mainSettings = data.settings || {};
+                    for (let key in mainSettings) {
+                        if (key !== 'cardBgFront' && key !== 'cardBgBack') {
+                            appState.settings[key] = mainSettings[key];
                         }
-                    });
-
-                    if (isDirty) { updateDoc(docRef, { students: appState.students }).catch(err => console.error(err)); }
+                    }
 
                     appState.attendance = data.attendance || {}; appState.teachers = data.teachers || [];
                     
@@ -151,12 +147,8 @@
                     if (!appState.settings.loginBg) appState.settings.loginBg = "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=2000";
                     if (!appState.settings.mainLogo) appState.settings.mainLogo = "cropped-Logo-Tut-Wuri-Handayani-PNG-Warna-1.webp";
                     if (!appState.settings.imgbbApiKey) appState.settings.imgbbApiKey = ""; 
-                    if (!appState.settings.cardBgFront) appState.settings.cardBgFront = "";
-                    if (!appState.settings.cardBgBack) appState.settings.cardBgBack = "";
                     if (!appState.settings.namaKepsek) appState.settings.namaKepsek = "";
                     if (!appState.settings.nipKepsek) appState.settings.nipKepsek = "";
-                    
-                    // Link SVG Asli & Super Kuat
                     if (!appState.settings.kopLogoKiri) appState.settings.kopLogoKiri = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Lambang_Kota_Manado.svg/512px-Lambang_Kota_Manado.svg.png";
                     if (!appState.settings.kopLogoKanan) appState.settings.kopLogoKanan = "https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg";
 
@@ -173,6 +165,29 @@
                     }
                 }
             });
+
+            // 2. Dengarkan BRANKAS KHUSUS (Desain Kartu) - Anti Rollback
+            const assetRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_assets', 'backgrounds');
+            onSnapshot(assetRef, (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    if (!appState.settings) appState.settings = {};
+                    let updated = false;
+                    
+                    if (data.cardBgFront !== undefined && appState.settings.cardBgFront !== data.cardBgFront) {
+                        appState.settings.cardBgFront = data.cardBgFront;
+                        updated = true;
+                    }
+                    if (data.cardBgBack !== undefined && appState.settings.cardBgBack !== data.cardBgBack) {
+                        appState.settings.cardBgBack = data.cardBgBack;
+                        updated = true;
+                    }
+                    
+                    if (updated && appState.currentView === 'pengaturan') {
+                        renderPengaturan();
+                    }
+                }
+            });
         }
 
         window.saveDataToCloud = async (dataType = 'all') => {
@@ -180,8 +195,19 @@
             let payload = {};
             if (dataType === 'attendance') payload = { attendance: appState.attendance };
             else if (dataType === 'students') payload = { students: appState.students };
-            else if (dataType === 'settings') payload = { settings: appState.settings };
-            else payload = { attendance: appState.attendance, students: appState.students, settings: appState.settings };
+            else if (dataType === 'settings') {
+                // Pisahkan agar cardBgFront tidak ikut tersimpan ke buku utama
+                let cleanSettings = { ...appState.settings };
+                delete cleanSettings.cardBgFront;
+                delete cleanSettings.cardBgBack;
+                payload = { settings: cleanSettings };
+            }
+            else {
+                let cleanSettings = { ...appState.settings };
+                delete cleanSettings.cardBgFront;
+                delete cleanSettings.cardBgBack;
+                payload = { attendance: appState.attendance, students: appState.students, settings: cleanSettings };
+            }
             try { await setDoc(docRef, payload, { merge: true }); } catch(e) { UI.toast("Gagal menyimpan ke cloud!", "error"); }
         };
 
@@ -263,7 +289,6 @@
             closeSidebar();
         }
 
-        // --- MESIN GANDA PENGHAPUS BACKGROUND (GOOGLE AI + ALGORITMA FLOOD-FILL LOKAL) ---
         let googleAISegmenter = null;
 
         async function removePhotoBackground(sourceCanvas) {
@@ -300,6 +325,7 @@
                 console.warn("Beralih ke Mesin Pemotong Pixel Lokal...", err);
             }
 
+            // Fallback Local Background Removal
             const out = document.createElement('canvas');
             out.width = sourceCanvas.width;
             out.height = sourceCanvas.height;
@@ -396,7 +422,6 @@
             return out;
         }
 
-        // --- SISTEM UNGGAH GAMBAR (100% LEWAT IMGBB SEPERTI E-RAPOT) ---
         window.handleImageUpload = async (event, type) => {
             const file = event.target.files[0]; if (!file) return;
             if (!file.type.match('image.*')) { UI.toast("File harus gambar!", "error"); return; }
@@ -408,18 +433,20 @@
             reader.onload = (e) => {
                 const img = new Image();
                 
-                // ALARM ANTI-MACET: JIKA GAMBAR RUSAK, TAMPILKAN ERROR BUKANNYA DIAM!
                 img.onerror = () => {
                     if(loader) { loader.classList.add('hidden'); loader.querySelector('p').innerText = "MEMUAT DARI CLOUD..."; }
-                    UI.toast("Gagal membaca gambar. File mungkin rusak atau format tidak didukung.", "error");
+                    UI.toast("Gagal membaca gambar. File mungkin rusak.", "error");
                 };
 
                 img.onload = async () => {
                     const canvas = document.createElement('canvas');
                     
-                    let MAX_DIMENSION = 1200; 
+                    // KOMPRESI EKSTREM PINTAR
+                    let MAX_DIMENSION = 500; 
                     if (type === 'student') MAX_DIMENSION = 300; 
                     if (type === 'kopLogoKiri' || type === 'kopLogoKanan') MAX_DIMENSION = 300; 
+                    // 🚀 KEMBALIKAN KE RESOLUSI ULTRA HD: Karena sudah di Brankas Khusus, kita naikkan resolusinya ke 1200px!
+                    if (type === 'cardBgFront' || type === 'cardBgBack') MAX_DIMENSION = 1200; 
                     
                     let width = img.width; let height = img.height;
                     if (width > height) { if (width > MAX_DIMENSION) { height = Math.round(height * MAX_DIMENSION / width); width = MAX_DIMENSION; } } 
@@ -432,11 +459,30 @@
                         if(loader) loader.querySelector('p').innerText = "☁️ MENGIRIM KE CLOUD...";
                         let finalUrl = null;
                         
-                        // JALUR 100% IMGBB UNTUK SEMUANYA
+                        // 🚀 PENYELAMATAN BRANKAS KHUSUS (TIDAK PAKAI IMGBB, TIDAK BIKIN BUKU UTAMA KEPENUHAN)
+                        if (type === 'cardBgFront' || type === 'cardBgBack') {
+                            finalUrl = `data:${mime};base64,` + base64Data;
+                            try {
+                                if(loader) loader.querySelector('p').innerText = "💾 MENYIMPAN KE BRANKAS KHUSUS...";
+                                const assetRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_assets', 'backgrounds');
+                                await setDoc(assetRef, { [type]: finalUrl }, { merge: true });
+                                
+                                appState.settings[type] = finalUrl;
+                                renderPengaturan();
+                                UI.toast("Desain berhasil disimpan permanen!", "success");
+                            } catch(e) {
+                                console.error(e);
+                                UI.toast("Gagal menyimpan desain ke server.", "error");
+                            }
+                            if(loader) loader.classList.add('hidden');
+                            return; // KELUAR AGAR TIDAK MENGGANGGU BUKU UTAMA
+                        }
+
+                        // Untuk Logo & Foto Siswa, tetap pakai ImgBB
                         try {
                             let apiKeys = [];
                             if (appState.settings.imgbbApiKey && appState.settings.imgbbApiKey.trim() !== "") apiKeys.push(appState.settings.imgbbApiKey.trim());
-                            apiKeys.push("64a4bf7329bc4895cae1a62076043fb9", "d3511eb0c5a0db61928a38c234a6ef4e");
+                            apiKeys.push("64a4bf7329bc4895cae1a62076043fb9", "d3511eb0c5a0db61928a38c234a6ef4e", "8c2b535d49cc8b72506e0061e86ba3c8");
                             let uploadSuccess = false;
                             for (let k of apiKeys) {
                                 if(uploadSuccess) break;
@@ -448,7 +494,6 @@
                             }
                         } catch(err) {}
                         
-                        // JIKA IMGBB MATI (FALLBACK BASE64)
                         if (!finalUrl) {
                             finalUrl = `data:${mime};base64,` + base64Data;
                         }
@@ -457,13 +502,22 @@
                             const idx = appState.students.findIndex(s => s.id === window.currentUploadStudentId);
                             if(idx !== -1) { appState.students[idx].photoUrl = finalUrl; await saveDataToCloud('students'); loadStudentTable(); UI.toast("Foto siswa berhasil disimpan!", "success"); }
                         } else {
-                            appState.settings[type] = finalUrl; await saveDataToCloud('settings'); renderPengaturan(); UI.toast("Gambar/Logo berhasil disimpan!", "success");
+                            appState.settings[type] = finalUrl; 
+                            try {
+                                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
+                                await updateDoc(docRef, { [`settings.${type}`]: finalUrl });
+                            } catch(e) {
+                                await saveDataToCloud('settings'); 
+                            }
+                            renderPengaturan(); 
+                            UI.toast("Logo berhasil disimpan!", "success");
                         }
                         if(loader) { loader.classList.add('hidden'); loader.querySelector('p').innerText = "MEMUAT DARI CLOUD..."; }
                     };
 
-                    let mimeType = (type === 'student' || type === 'kopLogoKiri' || type === 'kopLogoKanan') ? 'image/png' : 'image/jpeg';
-                    let quality = mimeType === 'image/jpeg' ? 0.85 : undefined;
+                    // KOMPRESI PINTAR: Gambar ID Card diberi kualitas Ultra HD (0.9), sisanya dikompres agar ringan
+                    let mimeType = (type === 'cardBgFront' || type === 'cardBgBack') ? 'image/jpeg' : (type === 'student' || type === 'kopLogoKiri' || type === 'kopLogoKanan') ? 'image/png' : 'image/jpeg';
+                    let quality = (type === 'cardBgFront' || type === 'cardBgBack') ? 0.9 : (mimeType === 'image/jpeg' ? 0.5 : undefined); 
 
                     if (type === 'student') {
                         if(loader) loader.querySelector('p').innerHTML = "🤖 MENGHAPUS LATAR BELAKANG FOTO...<br><span style='font-size:11px; font-weight:normal; letter-spacing:0;'>(Mohon tunggu 2-5 detik)</span>";
@@ -480,11 +534,11 @@
             reader.readAsDataURL(file); event.target.value = '';
         };
 
-        // --- SISTEM CETAK LANYARD 2 SISI (Custom Background Presisi HD) ---
         window.printQRCodes = (studentList) => {
             let container = document.getElementById('print-area');
-            container.innerHTML = ''; container.classList.remove('hidden', 'no-print');
-            container.style.cssText = 'display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; position: absolute; left: 0; top: 0; width: 100%; padding: 10px; background: white;';
+            container.innerHTML = ''; 
+            container.classList.remove('hidden', 'no-print');
+            container.style.cssText = 'display: flex !important; flex-wrap: wrap; justify-content: center; gap: 15px; position: absolute; left: 0; top: 0; width: 100%; padding: 10px; background: white; z-index: 999999;';
     
             let bgFront = appState.settings.cardBgFront || '';
             let bgBack = appState.settings.cardBgBack || '';
@@ -497,20 +551,18 @@
 
                 let photoSrc = s.photoUrl;
                 let validPhoto = photoSrc && (photoSrc.startsWith('http') || photoSrc.startsWith('data:image'));
-                if(!validPhoto) photoSrc = 'https://placehold.co/300x400/ffffff/64748b?text=FOTO+SISWA';
+                if(!validPhoto) photoSrc = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiB2aWV3Qm94PSIwIDAgMzAwIDQwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiNmOGZhZmMiLz48dGV4dCB4PSIxNTAiIHk9IjIwMCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM5Y2EzYWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkZvdG8gS29zb25nPC90ZXh0Pjwvc3ZnPg==';
 
-                // 1. KARTU DEPAN
+                // KARTU DEPAN
                 let front = document.createElement('div');
                 front.style.cssText = cardStyle;
-                if (bgFront) front.style.backgroundImage = `url('${bgFront}')`;
+                if (bgFront) front.style.backgroundImage = `url("${bgFront}")`;
                 
                 front.innerHTML = `
                     <div style="position: absolute; right: 0; bottom: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 8px; box-sizing: border-box; z-index: 10;">
-                        <!-- FOTO SISWA -->
                         <div style="position: relative; z-index: 5; width: 100%; display: flex; justify-content: flex-end; margin-bottom: 0px; padding-right: 2px;">
                             <img src="${photoSrc}" style="width: 3.6cm; height: 4.8cm; object-fit: contain; object-position: bottom; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3)); mix-blend-mode: normal;">
                         </div>
-                        <!-- KOTAK NAMA & NISN -->
                         <div style="width: 100%; display: flex; flex-direction: column; align-items: flex-end; z-index: 10; padding-right: 4px;">
                             <div style="background-color: #991b1b; color: white; width: 70%; padding: 4px 2px; text-align: center; font-size: 7px; font-weight: 800; text-transform: uppercase; line-height: 1.2; display: flex; align-items: center; justify-content: center; min-height: 18px; box-shadow: 0 -2px 4px rgba(0,0,0,0.2); word-break: break-word; white-space: normal;">
                                 ${s.name}
@@ -522,10 +574,10 @@
                     </div>
                 `;
 
-                // 2. KARTU BELAKANG (BARCODE PRESISI 2.5cm)
+                // KARTU BELAKANG
                 let back = document.createElement('div');
                 back.style.cssText = cardStyle;
-                if (bgBack) back.style.backgroundImage = `url('${bgBack}')`;
+                if (bgBack) back.style.backgroundImage = `url("${bgBack}")`;
                 
                 back.innerHTML = `
                     <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 2.5cm; position: relative; z-index: 10;">
@@ -541,10 +593,19 @@
                 if(qrEl) new QRCode(qrEl, { text: s.id, width: 125, height: 125, colorDark : "#7f1d1d", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
             });
     
-            setTimeout(() => { window.print(); setTimeout(() => { container.classList.add('hidden', 'no-print'); container.style.display = 'none'; }, 1000); }, 1000);
+            // Sensor Jeda agar browser melukis background dengan matang
+            setTimeout(() => { 
+                window.print(); 
+            }, 2000);
+
+            // JANGAN hapus layar sampai tombol cetak/batal di klik oleh user
+            window.onafterprint = () => {
+                container.classList.add('hidden', 'no-print'); 
+                container.style.display = 'none';
+                window.onafterprint = null; 
+            };
         };
 
-        // --- SISTEM CETAK LAPORAN RESMI (KOP SURAT & TTD OTOMATIS) ---
         window.printLaporanResmi = () => {
             const cls = UI.val('rekap-class-filter');
             const my = UI.val('rekap-month-filter');
@@ -563,31 +624,17 @@
             let originalTable = document.getElementById('table-rekap');
             let tableClone = originalTable.cloneNode(true);
             
-            tableClone.className = '';
-            tableClone.style.width = '100%';
-            tableClone.style.borderCollapse = 'collapse';
-            tableClone.style.fontSize = '11px';
+            tableClone.className = ''; tableClone.style.width = '100%'; tableClone.style.borderCollapse = 'collapse'; tableClone.style.fontSize = '11px';
             
             tableClone.querySelectorAll('th, td').forEach(el => {
-                el.className = ''; 
-                el.style.border = '1px solid black';
-                el.style.padding = '4px 6px';
-                el.style.color = 'black'; 
-                el.style.backgroundColor = 'transparent';
+                el.className = ''; el.style.border = '1px solid black'; el.style.padding = '4px 6px'; el.style.color = 'black'; el.style.backgroundColor = 'transparent';
             });
-
             tableClone.querySelectorAll('thead th').forEach(el => {
-                el.style.fontWeight = 'bold';
-                el.style.backgroundColor = '#f3f4f6';
-                el.style.textAlign = 'center';
-                el.style.color = 'black';
+                el.style.fontWeight = 'bold'; el.style.backgroundColor = '#f3f4f6'; el.style.textAlign = 'center'; el.style.color = 'black';
             });
-
             tableClone.querySelectorAll('tbody tr').forEach(tr => {
-                let td = tr.querySelector('td');
-                if(td) { td.style.textAlign = 'left'; td.style.fontWeight = 'bold'; }
-                let otherTds = tr.querySelectorAll('td:not(:first-child)');
-                otherTds.forEach(otd => otd.style.textAlign = 'center');
+                let td = tr.querySelector('td'); if(td) { td.style.textAlign = 'left'; td.style.fontWeight = 'bold'; }
+                let otherTds = tr.querySelectorAll('td:not(:first-child)'); otherTds.forEach(otd => otd.style.textAlign = 'center');
             });
 
             let tableHtml = tableClone.outerHTML;
@@ -595,10 +642,8 @@
             let schoolName = appState.settings.schoolName || "SD NEGERI 06 MANADO";
             let namaKepsek = appState.settings.namaKepsek || ".........................";
             let nipKepsek = appState.settings.nipKepsek || ".........................";
-            
             let namaWali = appState.user.role === 'Wali Kelas' ? appState.user.name : ".........................";
             let nipWali = (appState.user.role === 'Wali Kelas' && appState.user.nip) ? appState.user.nip : ".........................";
-
             let logoManado = appState.settings.kopLogoKiri || "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Lambang_Kota_Manado.svg/512px-Lambang_Kota_Manado.svg.png";
             let logoTutWuri = appState.settings.kopLogoKanan || "https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg";
 
@@ -614,16 +659,13 @@
                         </div>
                         <img src="${logoTutWuri}" style="width: 85px; height: 85px; object-fit: contain;">
                     </div>
-
                     <div style="text-align: center; margin-bottom: 25px;">
                         <h3 style="margin: 0; text-decoration: underline; font-size: 16px; text-transform: uppercase; font-weight: bold;">REKAPITULASI KEHADIRAN BULAN ${monthName.toUpperCase()} ${year}</h3>
                         <p style="margin: 8px 0 0 0; font-size: 14px;">Kelas: <b>${cls === 'ALL' ? 'Semua Kelas' : cls}</b></p>
                     </div>
-
                     <div style="width: 100%; margin-bottom: 30px;">
                         ${tableHtml}
                     </div>
-
                     <div style="display: flex; justify-content: space-between; margin-top: 40px; padding: 0 40px;">
                         <div style="text-align: center;">
                             <p style="margin: 0;">Mengetahui,</p>
@@ -643,14 +685,106 @@
 
             container.innerHTML = html;
             container.classList.remove('hidden', 'no-print');
+            container.style.display = 'block'; 
 
-            setTimeout(() => {
-                window.print();
-                setTimeout(() => {
-                    container.classList.add('hidden', 'no-print');
-                    container.innerHTML = '';
-                }, 1000);
-            }, 500);
+            setTimeout(() => { window.print(); }, 1500);
+
+            window.onafterprint = () => {
+                container.classList.add('hidden', 'no-print');
+                container.style.display = 'none';
+                container.innerHTML = '';
+                window.onafterprint = null;
+            };
+        };
+
+        window.cetakPiagam = (studentId, rankCount, monthName) => {
+            const student = appState.students.find(s => s.id === studentId);
+            if (!student) return;
+
+            let container = document.getElementById('print-report-area');
+            if(!container) {
+                container = document.createElement('div');
+                container.id = 'print-report-area';
+                container.className = 'hidden no-print';
+                document.body.appendChild(container);
+            }
+
+            let schoolName = appState.settings.schoolName || "SD NEGERI 06 MANADO";
+            let namaKepsek = appState.settings.namaKepsek || ".........................";
+            let nipKepsek = appState.settings.nipKepsek || ".........................";
+            let namaWali = appState.user.role === 'Wali Kelas' ? appState.user.name : ".........................";
+            let nipWali = (appState.user.role === 'Wali Kelas' && appState.user.nip) ? appState.user.nip : ".........................";
+            
+            let logoManado = appState.settings.kopLogoKiri || "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Lambang_Kota_Manado.svg/512px-Lambang_Kota_Manado.svg.png";
+            let logoTutWuri = appState.settings.kopLogoKanan || "https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg";
+            
+            let photoSrc = student.photoUrl && (student.photoUrl.startsWith('http') || student.photoUrl.startsWith('data:image')) ? student.photoUrl : 'https://placehold.co/300x400/ffffff/64748b?text=FOTO+SISWA';
+
+            let html = `
+            <div style="width: 297mm; height: 210mm; background: white; padding: 20px; box-sizing: border-box; position: relative;">
+                <div style="width: 100%; height: 100%; border: 8px solid #d4af37; padding: 10px; box-sizing: border-box;">
+                    <div style="width: 100%; height: 100%; border: 2px solid #d4af37; padding: 30px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; position: relative; background: radial-gradient(circle, rgba(255,255,255,1) 60%, rgba(253,248,228,0.4) 100%);">
+                        
+                        <div style="display: flex; justify-content: space-between; width: 100%; position: absolute; top: 30px; padding: 0 40px; box-sizing: border-box;">
+                            <img src="${logoManado}" style="width: 100px; height: 100px; object-fit: contain;">
+                            <img src="${logoTutWuri}" style="width: 100px; height: 100px; object-fit: contain;">
+                        </div>
+
+                        <h1 style="font-family: 'Times New Roman', serif; font-size: 42px; color: #1e3a8a; margin: 20px 0 5px 0; font-weight: 900; letter-spacing: 2px; text-transform: uppercase;">PIAGAM PENGHARGAAN</h1>
+                        <h2 style="font-family: 'Arial', sans-serif; font-size: 20px; color: #4b5563; margin: 0 0 30px 0; font-weight: bold; letter-spacing: 1px;">BINTANG DISIPLIN & KEHADIRAN</h2>
+
+                        <p style="font-family: 'Arial', sans-serif; font-size: 16px; color: #374151; margin-bottom: 25px;">Diberikan dengan penuh rasa bangga kepada:</p>
+                        
+                        <div style="display: flex; align-items: center; gap: 30px; margin-bottom: 25px; background: rgba(255,255,255,0.8); padding: 15px 40px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #fde68a;">
+                            <img src="${photoSrc}" style="width: 120px; height: 150px; object-fit: contain; border-radius: 10px; border: 3px solid #d4af37;">
+                            <div style="text-align: left;">
+                                <h1 style="font-family: 'Times New Roman', serif; font-size: 48px; color: #111827; margin: 0 0 5px 0; font-weight: bold; border-bottom: 2px dashed #cbd5e1; padding-bottom: 5px;">${student.name}</h1>
+                                <p style="font-family: 'Arial', sans-serif; font-size: 18px; color: #4b5563; margin: 5px 0 0 0; font-weight: bold;">NISN: ${student.nis} <span style="margin: 0 15px; color: #9ca3af;">|</span> KELAS: ${student.class}</p>
+                            </div>
+                        </div>
+
+                        <p style="font-family: 'Arial', sans-serif; font-size: 16px; color: #374151; text-align: center; max-width: 80%; line-height: 1.6;">Atas prestasi gemilangnya dalam menjaga kedisiplinan dengan rekor <b style="color: #047857;">Hadir 100% Tepat Waktu (Tanpa Alpha, Izin, Sakit, & Terlambat)</b> sepanjang bulan <b>${monthName.toUpperCase()}</b>. Semoga menjadi teladan yang baik bagi seluruh siswa ${schoolName}.</p>
+
+                        <div style="display: flex; justify-content: space-between; width: 100%; margin-top: auto; padding: 0 50px; box-sizing: border-box;">
+                            <div style="text-align: center; font-family: 'Arial', sans-serif;">
+                                <p style="margin: 0; font-size: 14px;">Mengetahui,</p>
+                                <p style="margin: 0; font-size: 14px; margin-bottom: 70px;">Kepala Sekolah</p>
+                                <p style="margin: 0; font-size: 16px; font-weight: bold; text-decoration: underline;">${namaKepsek}</p>
+                                <p style="margin: 5px 0 0 0; font-size: 12px;">NIP. ${nipKepsek}</p>
+                            </div>
+                            <div style="text-align: center; font-family: 'Arial', sans-serif;">
+                                <p style="margin: 0; font-size: 14px;">Manado, ${new Date().getDate()} ${monthName}</p>
+                                <p style="margin: 0; font-size: 14px; margin-bottom: 70px;">Wali Kelas ${student.class}</p>
+                                <p style="margin: 0; font-size: 16px; font-weight: bold; text-decoration: underline;">${namaWali}</p>
+                                <p style="margin: 5px 0 0 0; font-size: 12px;">NIP. ${nipWali}</p>
+                            </div>
+                        </div>
+
+                        <div style="position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; background: #d4af37; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 4px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+                            <span style="font-size: 36px; color: white;">🏆</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;
+
+            container.innerHTML = html;
+            container.classList.remove('hidden', 'no-print');
+            container.style.display = 'block';
+            
+            let style = document.createElement('style');
+            style.innerHTML = '@page { size: A4 landscape; margin: 0; }';
+            document.head.appendChild(style);
+
+            setTimeout(() => { window.print(); }, 1500);
+
+            window.onafterprint = () => {
+                container.classList.add('hidden', 'no-print');
+                container.style.display = 'none';
+                container.innerHTML = '';
+                document.head.removeChild(style);
+                window.onafterprint = null;
+            };
         };
 
         function renderDashboard() {
@@ -675,19 +809,21 @@
             </div>
             
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
-                <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col">
+                <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col h-[400px]">
                     <div class="p-4 bg-yellow-50 border-b border-yellow-100 flex items-center justify-between"><h3 class="font-bold text-yellow-800 uppercase tracking-wide text-sm"><i class="fas fa-exclamation-triangle mr-2"></i> Sering Terlambat (Top 5)</h3></div>
-                    <div class="p-0 overflow-auto max-h-64"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm z-10"><tr><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Total Telat</th></tr></thead><tbody id="dash-table-telat" class="divide-y divide-gray-100"></tbody></table></div>
+                    <div class="p-0 overflow-auto flex-1"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm z-10"><tr><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Total Telat</th></tr></thead><tbody id="dash-table-telat" class="divide-y divide-gray-100"></tbody></table></div>
                 </div>
                 
-                <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col">
-                    <div class="p-4 bg-purple-50 border-b border-purple-100 flex items-center justify-between"><h3 class="font-bold text-purple-800 uppercase tracking-wide text-sm"><i class="fas fa-exclamation-circle mr-2"></i> Rawan Alpa (Bulan Ini)</h3></div>
-                    <div class="p-0 overflow-auto max-h-64"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm z-10"><tr><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Alpa</th><th class="p-3 text-center">Aksi</th></tr></thead><tbody id="dash-table-alpa" class="divide-y divide-gray-100"></tbody></table></div>
+                <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col h-[400px]">
+                    <div class="p-4 bg-amber-100 border-b border-amber-200 flex items-center justify-between"><h3 class="font-bold text-amber-900 uppercase tracking-wide text-sm"><i class="fas fa-trophy mr-2 text-amber-600"></i> Bintang Disiplin Bulan Ini</h3></div>
+                    <div id="dash-bintang-disiplin" class="p-4 flex-1 flex flex-col items-center justify-center bg-gradient-to-b from-white to-amber-50 relative">
+                        <!-- Konten diisi oleh JS -->
+                    </div>
                 </div>
 
-                <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col">
+                <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col h-[400px]">
                     <div class="p-4 bg-red-50 border-b border-red-100 flex items-center justify-between"><h3 class="font-bold text-red-800 uppercase tracking-wide text-sm"><i class="fas fa-user-clock mr-2"></i> Belum Diabsen</h3><span class="text-[10px] bg-red-200 text-red-800 px-2 py-1 rounded-full font-bold" id="dash-badge-belum">0 Siswa</span></div>
-                    <div class="p-0 overflow-auto max-h-64"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm z-10"><tr><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Kelas</th></tr></thead><tbody id="dash-table-belum" class="divide-y divide-gray-100"></tbody></table></div>
+                    <div class="p-0 overflow-auto flex-1"><table class="w-full text-sm text-left"><thead class="bg-slate-50 text-slate-500 text-xs sticky top-0 shadow-sm z-10"><tr><th class="p-3">Nama Siswa</th><th class="p-3 text-center">Kelas</th></tr></thead><tbody id="dash-table-belum" class="divide-y divide-gray-100"></tbody></table></div>
                 </div>
             </div>`;
             UI.html('view-dashboard', content);
@@ -724,47 +860,86 @@
             const elDetSia = document.getElementById('dash-detail-sia'); if(elDetSia) elDetSia.innerText = `S: ${countSakit} | I: ${countIzin} | A: ${countAlpa}`;
             document.getElementById('dash-tot-belum').innerText = countBelum; 
 
-            // TABEL BELUM ABSEN
             let htmlBelum = '';
             belumAbsenList.sort((a,b) => a.student.class.localeCompare(b.student.class) || a.student.name.localeCompare(b.student.name)).forEach((item, i) => {
                 htmlBelum += `<tr class="hover:bg-slate-50"><td class="p-3 font-semibold text-gray-700 text-xs">${item.student.name}</td><td class="p-3 text-center"><span class="bg-gray-100 border px-2 py-0.5 rounded text-[10px] font-bold">${item.student.class}</span></td></tr>`;
             });
-            if(htmlBelum === '') htmlBelum = `<tr><td colspan="2" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50"><i class="fas fa-check-circle mr-1"></i> Semua siswa sudah diabsen!</td></tr>`;
+            if(htmlBelum === '') htmlBelum = `<tr><td colspan="2" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50 h-32"><i class="fas fa-check-circle mr-1"></i> Semua siswa sudah diabsen!</td></tr>`;
             document.getElementById('dash-table-belum').innerHTML = htmlBelum; 
             document.getElementById('dash-badge-belum').innerText = `${countBelum} Siswa`;
 
-            // TABEL SERING TERLAMBAT
             let telatDict = {}; for(let date in appState.attendance) { for(let sId in appState.attendance[date]) { if(appState.attendance[date][sId].status === 'Terlambat') { if(!telatDict[sId]) telatDict[sId] = 0; telatDict[sId]++; } } }
             let telatArr = []; targetStds.forEach(s => { if(telatDict[s.id]) telatArr.push({ name: s.name, class: s.class, count: telatDict[s.id] }); }); telatArr.sort((a,b) => b.count - a.count);
             let htmlTelat = '';
             telatArr.slice(0, 5).forEach((t, i) => { htmlTelat += `<tr class="hover:bg-yellow-50"><td class="p-3 font-bold text-gray-800 text-xs">${t.name} <span class="text-[10px] text-gray-400 block">${t.class}</span></td><td class="p-3 text-center"><span class="border px-2 py-0.5 rounded text-xs font-black bg-orange-100 text-orange-700">${t.count}x</span></td></tr>`; });
-            if(htmlTelat === '') htmlTelat = `<tr><td colspan="2" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50">Belum ada riwayat telat.</td></tr>`;
+            if(htmlTelat === '') htmlTelat = `<tr><td colspan="2" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50 h-32">Belum ada riwayat telat.</td></tr>`;
             document.getElementById('dash-table-telat').innerHTML = htmlTelat;
 
-            // TABEL RAWAN ALPA
             let currentMonth = todayKey.substring(0, 7);
-            let alpaDict = {};
+            let monthName = new Date(todayKey).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+            let activeDaysCount = 0;
+            let hariAktif = {}; 
+            
             for(let date in appState.attendance) {
                 if(date.startsWith(currentMonth)) {
-                    for(let sId in appState.attendance[date]) {
-                        if(appState.attendance[date][sId].status === 'Alpa') {
-                            alpaDict[sId] = (alpaDict[sId] || 0) + 1;
-                        }
-                    }
+                    hariAktif[date] = true;
                 }
             }
-            let alpaArr = []; targetStds.forEach(s => { if(alpaDict[s.id] >= 3) alpaArr.push({ student: s, count: alpaDict[s.id] }); }); alpaArr.sort((a,b) => b.count - a.count);
-            let htmlAlpa = '';
-            alpaArr.forEach(item => {
-                let phone = item.student.parentPhone || ''; if (phone.startsWith('0')) phone = '62' + phone.substring(1);
-                let msg = encodeURIComponent(`*PERINGATAN DINI KEHADIRAN*\n\nYth. Orang Tua/Wali dari *${item.student.name}*,\n\nKami menginformasikan bahwa ananda telah tercatat *TIDAK HADIR TANPA KETERANGAN (ALPA)* sebanyak *${item.count} kali* pada bulan ini.\n\nMohon kerja sama Bapak/Ibu untuk memantau kehadiran dan kedisiplinan ananda demi kelancaran proses belajarnya di sekolah. Terima kasih.\n\n_Wali Kelas & Sistem Absensi ${appState.settings.schoolName}_`);
-                let waBtn = phone ? `<a href="https://wa.me/${phone}?text=${msg}" target="_blank" class="bg-emerald-500 hover:bg-emerald-600 text-white w-7 h-7 rounded flex items-center justify-center shadow" title="Kirim Surat Peringatan WA"><i class="fab fa-whatsapp"></i></a>` : `<button onclick="alert('Nomor WA belum diatur!')" class="bg-gray-300 text-gray-500 w-7 h-7 rounded flex items-center justify-center cursor-not-allowed"><i class="fab fa-whatsapp"></i></button>`;
-                htmlAlpa += `<tr class="hover:bg-purple-50"><td class="p-3 font-bold text-gray-800 text-xs">${item.student.name} <span class="text-[10px] text-gray-400 block">${item.student.class}</span></td><td class="p-3 text-center"><span class="border px-2 py-0.5 rounded text-xs font-black bg-purple-100 text-purple-700">${item.count}x</span></td><td class="p-3 text-center flex justify-center">${waBtn}</td></tr>`;
-            });
-            if(htmlAlpa === '') htmlAlpa = `<tr><td colspan="3" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50"><i class="fas fa-check-circle mr-1"></i> Tidak ada siswa rawan alpa.</td></tr>`;
-            const alpaTableBody = document.getElementById('dash-table-alpa'); if (alpaTableBody) alpaTableBody.innerHTML = htmlAlpa;
+            activeDaysCount = Object.keys(hariAktif).length;
 
-            // GRAFIK
+            let kandidatBintang = null;
+
+            if (activeDaysCount >= 1) {
+                let siswaRajin = [];
+                
+                targetStds.forEach(s => {
+                    let hadirCount = 0;
+                    let telatSakitIzinAlpa = 0;
+                    
+                    for(let date in hariAktif) {
+                        if(appState.attendance[date] && appState.attendance[date][s.id]) {
+                            if(appState.attendance[date][s.id].status === 'Hadir') hadirCount++;
+                            else telatSakitIzinAlpa++;
+                        } else {
+                            telatSakitIzinAlpa++;
+                        }
+                    }
+
+                    if (hadirCount === activeDaysCount && telatSakitIzinAlpa === 0) {
+                        siswaRajin.push({ student: s, score: hadirCount });
+                    }
+                });
+
+                if (siswaRajin.length > 0) {
+                    kandidatBintang = siswaRajin[0].student;
+                }
+            }
+
+            const areaBintang = document.getElementById('dash-bintang-disiplin');
+            if (areaBintang) {
+                if (kandidatBintang) {
+                    let photoSrc = kandidatBintang.photoUrl && (kandidatBintang.photoUrl.startsWith('http') || kandidatBintang.photoUrl.startsWith('data:image')) ? kandidatBintang.photoUrl : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNTAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgMTUwIDIwMCI+PHJlY3Qgd2lkdGg9IjE1MCIgaGVpZ2h0PSIyMDAiIGZpbGw9IiNmOGZhZmMiLz48dGV4dCB4PSI3NSIgeT0iMTAwIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzljYTNhZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+Rm90byBLb3Nvbmc8L3RleHQ+PC9zdmc+';
+                    areaBintang.innerHTML = `
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-amber-200 rounded-bl-full opacity-20 -z-10"></div>
+                        <img src="${photoSrc}" class="w-24 h-24 md:w-32 md:h-32 object-contain rounded-full border-4 border-amber-400 shadow-lg mb-3 bg-white">
+                        <h4 class="font-black text-lg text-slate-800 text-center uppercase leading-tight">${kandidatBintang.name}</h4>
+                        <p class="text-sm font-bold text-amber-600 mb-2">${kandidatBintang.class} | Hadir 100%</p>
+                        <p class="text-[10px] text-gray-500 text-center px-4 mb-4">Tanpa rekor Terlambat, Sakit, Izin, ataupun Alpa bulan ini.</p>
+                        <button onclick="cetakPiagam('${kandidatBintang.id}', ${activeDaysCount}, '${monthName}')" class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-md transition transform hover:scale-105 flex items-center text-sm w-full max-w-[200px] justify-center">
+                            <i class="fas fa-print mr-2"></i> Cetak Piagam
+                        </button>
+                    `;
+                } else {
+                    areaBintang.innerHTML = `
+                        <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center w-full h-full flex flex-col items-center justify-center">
+                            <i class="fas fa-star-half-alt text-4xl text-gray-300 mb-3"></i>
+                            <p class="text-sm font-bold text-gray-400">Belum ada kandidat Bintang Disiplin.</p>
+                            <p class="text-xs text-gray-400 mt-2">Syarat: Hadir 100% tanpa Alpa, Sakit, Izin, maupun Terlambat pada bulan berjalan.</p>
+                        </div>
+                    `;
+                }
+            }
+
             let labels7Days = []; let dataHadir7Days = []; let current = new Date(Date.now() - tzoffset);
             for(let i=6; i>=0; i--) { let d = new Date(current); d.setDate(d.getDate() - i); let dKey = d.toISOString().split('T')[0]; labels7Days.push(`${d.toLocaleDateString('id-ID', { weekday: 'short' })} (${d.getDate()})`); let hCount = 0; let totalTarget = targetStds.length; if(appState.attendance[dKey]) { targetStds.forEach(s => { if(appState.attendance[dKey][s.id]) { let st = appState.attendance[dKey][s.id].status; if(st === 'Hadir' || st === 'Terlambat') hCount++; } }); } dataHadir7Days.push(totalTarget > 0 ? Math.round((hCount/totalTarget)*100) : 0); }
             if(window.chartInstance1) window.chartInstance1.destroy();
@@ -902,9 +1077,13 @@
             let dateFormatted = new Date(dateKey).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
             
             let isAlpa = statusType === 'Alpa';
+            let isSakit = statusType === 'Sakit';
             let message = '';
+            
             if (isAlpa) {
                 message = `*PEMBERITAHUAN KETIDAKHADIRAN (ALPA)*\n\nYth. Orang Tua/Wali dari *${student.name}*,\n\nKami menginformasikan bahwa pada *${dateFormatted}*, ananda tercatat *TIDAK HADIR TANPA KETERANGAN (ALPA)* di sekolah.\n\nMohon konfirmasi dan kerja sama Bapak/Ibu untuk memantau kehadiran ananda. Apabila ananda berhalangan hadir karena sakit atau keperluan izin, mohon kiranya dapat menginformasikan kepada Wali Kelas. Terima kasih.\n\n_Sistem Absensi ${appState.settings.schoolName}_`;
+            } else if (isSakit) {
+                message = `*PEMBERITAHUAN KETIDAKHADIRAN (SAKIT)*\n\nYth. Orang Tua/Wali dari *${student.name}*,\n\nKami telah mencatat keterangan SAKIT ananda pada *${dateFormatted}*.\n\nSegenap keluarga besar sekolah mendoakan semoga ananda segera diberikan kesembuhan dan kesehatan, agar dapat segera kembali belajar dan bermain bersama teman-teman di sekolah.\n\n_Salam hangat dari Wali Kelas & ${appState.settings.schoolName}_`;
             } else {
                 message = `*PEMBERITAHUAN KEHADIRAN*\n\nYth. Orang Tua/Wali dari *${student.name}*,\n\nKami menginformasikan bahwa pada *${dateFormatted}*, ananda tercatat hadir di sekolah pada pukul *${timeStr} WITA* dengan status kehadiran: *TERLAMBAT*.\n\nMohon bimbingan di rumah agar ananda dapat berangkat lebih awal. Terima kasih.\n\n_Sistem Absensi ${appState.settings.schoolName}_`;
             }
@@ -912,12 +1091,13 @@
             let waLink = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : '#';
             let waBtnClass = phone ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl' : 'bg-gray-300 text-gray-500 cursor-not-allowed';
 
-            let boxTheme = isAlpa ? 'bg-red-50 border-red-400' : 'bg-yellow-50 border-yellow-400';
-            let iconTheme = isAlpa ? 'fa-user-times text-red-500' : 'fa-exclamation-triangle text-yellow-500';
-            let nameTheme = isAlpa ? 'text-red-900' : 'text-yellow-900';
-            let statusTheme = isAlpa ? 'text-red-600' : 'text-yellow-600';
-            let statusLabel = isAlpa ? 'ALPA (TANPA KETERANGAN)' : 'TERLAMBAT';
-            let closeBtnTheme = isAlpa ? 'border-red-400 hover:bg-red-100 text-red-800' : 'border-yellow-400 hover:bg-yellow-100 text-yellow-800';
+            let boxTheme = isAlpa ? 'bg-red-50 border-red-400' : (isSakit ? 'bg-blue-50 border-blue-400' : 'bg-yellow-50 border-yellow-400');
+            let iconTheme = isAlpa ? 'fa-user-times text-red-500' : (isSakit ? 'fa-procedures text-blue-500' : 'fa-exclamation-triangle text-yellow-500');
+            let nameTheme = isAlpa ? 'text-red-900' : (isSakit ? 'text-blue-900' : 'text-yellow-900');
+            let statusTheme = isAlpa ? 'text-red-600' : (isSakit ? 'text-blue-600' : 'text-yellow-600');
+            let statusLabel = isAlpa ? 'ALPA (TANPA KETERANGAN)' : (isSakit ? 'MENDOAKAN KESEMBUHAN' : 'TERLAMBAT');
+            let closeBtnTheme = isAlpa ? 'border-red-400 hover:bg-red-100 text-red-800' : (isSakit ? 'border-blue-400 hover:bg-blue-100 text-blue-800' : 'border-yellow-400 hover:bg-yellow-100 text-yellow-800');
+            let btnText = isSakit ? 'Kirim Doa via WA' : 'Kirim WA Orang Tua';
 
             const modal = document.createElement('div');
             modal.id = 'manual-wa-modal';
@@ -931,7 +1111,7 @@
                     ${!phone ? `<p class="text-xs font-bold text-red-600 bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg mb-4"><i class="fas fa-info-circle mr-1"></i> Nomor WA orang tua belum diisi di menu Data WA & Kartu!</p>` : ''}
                     <div class="flex flex-col gap-3 w-full">
                         <a href="${waLink}" target="${phone ? '_blank' : '_self'}" onclick="${phone ? 'setTimeout(() => closeManualWaModal(), 500);' : 'return false;'}" class="${waBtnClass} py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition text-sm">
-                            <i class="fab fa-whatsapp text-2xl"></i> Kirim WA Orang Tua
+                            <i class="fab fa-whatsapp text-2xl"></i> ${btnText}
                         </a>
                         <button onclick="closeManualWaModal()" class="bg-white border-2 ${closeBtnTheme} py-3 rounded-xl font-bold transition text-sm shadow-sm active:scale-95">
                             <i class="fas fa-check mr-2"></i> Tutup & Lanjutkan
@@ -950,10 +1130,15 @@
             try { if(status === 'Hapus') { delete appState.attendance[dateKey][sId]; await updateDoc(docRef, { [`attendance.${dateKey}.${sId}`]: deleteField() }); } else { appState.attendance[dateKey][sId] = { status: status, time: timeStr, manual: true }; await updateDoc(docRef, { [`attendance.${dateKey}.${sId}`]: { status: status, time: timeStr, manual: true } }); } } catch(e) { saveDataToCloud('attendance'); }
             loadManualTable(); 
             
-            if (status === 'Terlambat' || status === 'Alpa') {
+            if (status === 'Terlambat' || status === 'Alpa' || status === 'Sakit') {
                 const student = appState.students.find(s => s.id === sId);
                 const userSound = appState.settings.attendance?.scanSound || 'voice';
-                const voiceAlert = status === 'Alpa' ? 'Siswa Alpa' : 'Siswa Terlambat';
+                
+                let voiceAlert = '';
+                if (status === 'Alpa') voiceAlert = 'Siswa Alpa';
+                else if (status === 'Sakit') voiceAlert = 'Semoga Lekas Sembuh';
+                else voiceAlert = 'Siswa Terlambat';
+
                 UI.playBeep(userSound === 'voice' ? 'voice' : 'error', voiceAlert);
                 if (student) showManualWaNotificationModal(student, status, timeStr, dateKey);
             } else {
@@ -1009,7 +1194,7 @@
                 let photoSrc = s.photoUrl; 
                 let isValidPhoto = photoSrc && (photoSrc.startsWith('http') || photoSrc.startsWith('data:image'));
                 
-                let photoHtml = isValidPhoto ? `<img src="${photoSrc}" onerror="this.onerror=null; this.src='https://placehold.co/105x140/e2e8f0/64748b?text=Error';" class="w-10 h-14 object-contain rounded shadow border border-gray-300 cursor-pointer hover:opacity-80 transition bg-[repeating-conic-gradient(#f1f5f9_0%_25%,#ffffff_0%_50%)] bg-[length:8px_8px]" onclick="triggerPhotoUpload('${s.id}')" title="Ubah Foto">` : `<div onclick="triggerPhotoUpload('${s.id}')" class="w-10 h-14 bg-slate-200 rounded flex items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-300 transition shadow border border-gray-300" title="Unggah Foto (Hapus Latar Belakang Otomatis)"><i class="fas fa-camera"></i></div>`;
+                let photoHtml = isValidPhoto ? `<img src="${photoSrc}" onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDUiIGhlaWdodD0iMTQwIiB2aWV3Qm94PSIwIDAgMTA1IDE0MCI+PHJlY3Qgd2lkdGg9IjEwNSIgaGVpZ2h0PSIxNDAiIGZpbGw9IiNlMmU4ZjAiLz48dGV4dCB4PSI1MiIgeT0iNzAiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjEwIiBmaWxsPSIjNjQ3NDhiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5FcnJvcjwvdGV4dD48L3N2Zz4=';" class="w-10 h-14 object-contain rounded shadow border border-gray-300 cursor-pointer hover:opacity-80 transition bg-[repeating-conic-gradient(#f1f5f9_0%_25%,#ffffff_0%_50%)] bg-[length:8px_8px]" onclick="triggerPhotoUpload('${s.id}')" title="Ubah Foto">` : `<div onclick="triggerPhotoUpload('${s.id}')" class="w-10 h-14 bg-slate-200 rounded flex items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-300 transition shadow border border-gray-300" title="Unggah Foto (Hapus Latar Belakang Otomatis)"><i class="fas fa-camera"></i></div>`;
                 
                 tbody += `<tr class="hover:bg-slate-50 bg-white border-b"><td class="p-3 text-center">${i+1}</td><td class="p-3 flex justify-center">${photoHtml}</td><td class="p-3 font-semibold">${s.name}<br><span class="text-xs text-gray-500 font-mono">NISN: ${s.nis}</span></td><td class="p-3 text-center font-bold text-emerald-700 bg-emerald-50">${s.class}</td><td class="p-3"><div class="flex items-center gap-2"><i class="fab fa-whatsapp text-green-500 text-lg"></i><input type="number" id="phone_${s.id}" class="border rounded p-2 text-sm w-full md:w-48 outline-none focus:border-emerald-500 font-mono" value="${s.parentPhone || ''}" placeholder="Cth: 0812345..."><button onclick="savePhone('${s.id}')" class="bg-slate-200 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 px-3 py-2 rounded font-bold transition shadow-sm"><i class="fas fa-save"></i></button></div></td><td class="p-3 text-center"><button onclick="generateSingleQR('${s.id}')" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-print mr-1"></i> Cetak</button></td></tr>`;
             });
@@ -1027,20 +1212,70 @@
             UI.val('set-nama-kepsek', appState.settings.namaKepsek || ''); UI.val('set-nip-kepsek', appState.settings.nipKepsek || '');
             [0,1,2,3,4,5,6].forEach(d => { let cb = document.getElementById(`day-${d}`); if(cb) cb.checked = att.workDays.includes(d); }); renderHolidaysList();
             
-            let defFront = appState.settings.cardBgFront || 'https://placehold.co/300x480/f8fafc/64748b?text=Kosong+(Upload+Desain+Depan)';
-            let defBack = appState.settings.cardBgBack || 'https://placehold.co/300x480/f8fafc/64748b?text=Kosong+(Upload+Desain+Belakang)';
+            let frontUrl = appState.settings.cardBgFront || '';
+            let backUrl = appState.settings.cardBgBack || '';
             
-            UI.html('preview-bg-front', `<img src="${defFront}" class="w-full object-contain rounded border shadow-sm mx-auto mb-2 bg-white" style="max-height: 250px;">`); 
-            UI.html('preview-bg-back', `<img src="${defBack}" class="w-full object-contain rounded border shadow-sm mx-auto mb-2 bg-white" style="max-height: 250px;">`);
-            
-            // LOGO DENGAN ALARM ONERROR JIKA RUSAK
+            // 🚀 RENDER ANTI-INTERNET BLOKIR & DETEKSI ERROR LOKAL
+            const getPreviewHtml = (url, type) => {
+                if (!url || url.trim() === '') {
+                    return `
+                    <div class="w-full h-48 bg-slate-100 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 text-slate-400 shadow-inner">
+                        <i class="fas fa-image text-4xl mb-3 opacity-50"></i>
+                        <span class="text-xs font-bold uppercase tracking-widest">KOSONG</span>
+                        <span class="text-[10px] opacity-70 mt-1">Silakan Upload Desain</span>
+                    </div>`;
+                }
+                
+                // Jika URL ada tetapi bukan Base64 atau ImgBB yang valid, berarti gambar corrupt
+                let isCorrupt = false;
+                if (!url.startsWith('data:image') && !url.startsWith('http')) {
+                    isCorrupt = true;
+                }
+
+                if (isCorrupt) {
+                    return `
+                    <div class="w-full h-48 bg-red-50 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-red-300 text-red-500 shadow-inner p-4 text-center">
+                        <i class="fas fa-exclamation-triangle text-4xl mb-3"></i>
+                        <span class="text-xs font-bold uppercase tracking-widest">ERROR MEMUAT</span>
+                        <span class="text-[10px] mt-1 text-red-400">Silakan Klik Hapus Error di bawah</span>
+                    </div>`;
+                }
+
+                return `
+                <div class="relative w-full h-48 group bg-white rounded-xl border shadow-sm">
+                    <img src="${url}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" class="w-full h-full object-contain p-1">
+                    <div style="display:none;" class="w-full h-full bg-red-50 flex-col items-center justify-center rounded-xl text-red-500 p-4 text-center">
+                        <i class="fas fa-exclamation-triangle text-4xl mb-3"></i>
+                        <span class="text-xs font-bold uppercase tracking-widest">ERROR MEMUAT</span>
+                    </div>
+                </div>`;
+            };
+
+            UI.html('preview-bg-front', getPreviewHtml(frontUrl, 'cardBgFront'));
+            UI.html('preview-bg-back', getPreviewHtml(backUrl, 'cardBgBack'));
+
+            // Mengatur tombol error agar berkedip jika ada corrupt
+            const checkBtnError = (url, btnId) => {
+                const btn = document.getElementById(btnId);
+                if(btn) {
+                    if(url && (!url.startsWith('data:image') && !url.startsWith('http'))) {
+                        btn.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> KLIK INI UNTUK HAPUS ERROR`;
+                        btn.className = "text-xs w-full mt-3 py-2.5 px-4 rounded-xl border-2 border-red-400 text-red-600 font-bold bg-white hover:bg-red-50 flex-shrink-0 transition duration-300 animate-pulse shadow-md";
+                    } else {
+                        btn.innerHTML = `<i class="fas fa-trash mr-1"></i> Kosongkan Desain`;
+                        btn.className = "text-xs w-full mt-3 py-2 px-4 rounded-lg border border-slate-200 text-slate-500 font-bold bg-slate-50 hover:bg-red-50 hover:text-red-500 hover:border-red-200 flex-shrink-0 transition duration-300";
+                    }
+                }
+            };
+            checkBtnError(frontUrl, 'btn-reset-front');
+            checkBtnError(backUrl, 'btn-reset-back');
+
             let defLogoKiri = appState.settings.kopLogoKiri || 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Lambang_Kota_Manado.svg/512px-Lambang_Kota_Manado.svg.png';
             let defLogoKanan = appState.settings.kopLogoKanan || 'https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg';
-            UI.html('preview-logo-kiri', `<img src="${defLogoKiri}" onerror="this.onerror=null; this.src='https://placehold.co/200x200/fee2e2/ef4444?text=LOGO+RUSAK';" class="w-24 h-24 object-contain rounded border bg-white shadow-sm p-1">`); 
-            UI.html('preview-logo-kanan', `<img src="${defLogoKanan}" onerror="this.onerror=null; this.src='https://placehold.co/200x200/fee2e2/ef4444?text=LOGO+RUSAK';" class="w-24 h-24 object-contain rounded border bg-white shadow-sm p-1">`);
+            UI.html('preview-logo-kiri', `<img src="${defLogoKiri}" class="w-24 h-24 object-contain rounded border bg-white shadow-sm p-1">`); 
+            UI.html('preview-logo-kanan', `<img src="${defLogoKanan}" class="w-24 h-24 object-contain rounded border bg-white shadow-sm p-1">`);
         };
 
-        // --- FUNGSI RESET LOGO BAWAAN YANG SUPER KUAT ---
         window.resetLogo = async (type) => {
             if(!appState.settings) appState.settings = {};
             if (type === 'kopLogoKiri') {
@@ -1055,6 +1290,26 @@
             } catch(e) { 
                 UI.toast("Gagal mereset logo", "error"); 
             }
+        };
+
+        window.resetBg = async (type) => {
+            if(!appState.settings) appState.settings = {};
+            appState.settings[type] = ""; // Kosongkan di memori
+            
+            try { 
+                // 1. Hapus dari Brankas Khusus
+                const assetRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_assets', 'backgrounds');
+                await updateDoc(assetRef, { [type]: deleteField() }); 
+            } catch(e) { }
+
+            try {
+                // 2. Jika ada sisa error nyangkut di Buku Utama, bersihkan juga
+                const mainRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
+                await updateDoc(mainRef, { [`settings.${type}`]: deleteField() });
+            } catch(e) { }
+            
+            renderPengaturan(); 
+            UI.toast("Desain berhasil dikosongkan!", "success"); 
         };
 
         window.renderHolidaysList = () => {
@@ -1086,13 +1341,10 @@
         <div class="loader mb-4"></div><p class="text-emerald-400 font-bold tracking-widest font-russo animate-pulse text-center px-4">MEMUAT...</p>
     </div>
 
-    <!-- AREA CETAK LANYARD -->
+    <!-- AREA CETAK LANYARD & PIAGAM -->
     <div id="print-area" class="hidden no-print text-center p-4"></div>
-    
-    <!-- AREA CETAK LAPORAN RESMI -->
     <div id="print-report-area" class="hidden no-print text-center p-4"></div>
     
-    <!-- UPLOAD FOTO SISWA -->
     <input type="file" id="student-photo-upload" accept="image/png, image/jpeg" class="hidden" onchange="handleImageUpload(event, 'student')">
 
     <div id="login-screen" class="flex-1 flex items-center justify-center relative overflow-hidden bg-slate-900 p-4">
@@ -1124,7 +1376,7 @@
 
         <main class="flex-1 overflow-hidden flex flex-col w-full relative bg-slate-50">
             <header class="bg-white shadow-sm border-b h-16 flex items-center justify-between px-4 md:px-6 z-20 sticky top-0 no-print shrink-0">
-                <div class="flex items-center gap-4"><button onclick="toggleSidebar()" class="text-gray-600 hover:text-emerald-600 text-xl p-2 rounded-lg bg-gray-100 hover:bg-emerald-50 transition"><i class="fas fa-bars"></i></button><span id="header-school-name" class="font-bold text-gray-800 hidden sm:block tracking-wide uppercase">Sistem Kehadiran</span></div>
+                <div class="flex items-center gap-4"><button onclick="toggleSidebar()" class="text-gray-600 hover:textemerald-600 text-xl p-2 rounded-lg bg-gray-100 hover:bg-emerald-50 transition"><i class="fas fa-bars"></i></button><span id="header-school-name" class="font-bold text-gray-800 hidden sm:block tracking-wide uppercase">Sistem Kehadiran</span></div>
                 <div class="flex items-center gap-4"><div class="text-right hidden md:block"><p class="text-sm font-bold text-gray-800" id="header-user-name">Nama Petugas</p><p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest" id="header-user-role">Role</p></div><button onclick="doLogout()" class="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-bold text-sm transition border border-red-200"><i class="fas fa-sign-out-alt mr-2"></i>Keluar</button></div>
             </header>
 
@@ -1134,6 +1386,7 @@
                     <div class="text-center w-full max-w-lg mb-6"><h2 class="text-lg md:text-xl font-bold text-slate-500 uppercase tracking-widest mb-1" id="scanner-date">Memuat...</h2><div id="scanner-time" class="text-5xl md:text-6xl font-black text-emerald-600 font-russo tracking-widest drop-shadow-md mb-3">00:00:00</div><p class="text-gray-500 font-medium text-sm bg-white inline-block px-4 py-2 rounded-full border shadow-sm"><i class="fas fa-qrcode mr-2 text-emerald-500"></i>Arahkan Kartu QR Siswa ke Kamera</p></div>
                     <div class="w-full max-w-lg bg-white rounded-3xl shadow-xl border p-4 md:p-6 text-center relative mx-auto"><div class="relative w-full max-w-[500px] mx-auto bg-slate-100 min-h-[300px] flex items-center justify-center rounded-2xl border-4 border-dashed border-slate-300 overflow-hidden"><div id="camera-wrapper" class="absolute inset-0 w-full h-full hidden relative"><div id="reader" class="absolute inset-0 w-full h-full" style="box-shadow: none;"></div><button type="button" onclick="switchCamera()" class="absolute bottom-4 right-4 bg-slate-900/80 hover:bg-slate-800 text-white w-12 h-12 flex items-center justify-center rounded-full shadow-lg backdrop-blur-md z-30 transition-transform transform hover:scale-110 border border-slate-700" title="Balik Kamera"><i class="fas fa-camera-rotate text-xl"></i></button></div><div id="camera-activate-btn-container" class="absolute z-20 flex flex-col items-center justify-center w-full h-full bg-slate-100/90 backdrop-blur-sm"><button onclick="startScanner()" class="w-56 h-16 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition-transform hover:scale-105 flex items-center justify-center gap-2 text-lg"><i class="fas fa-camera"></i> Aktifkan Kamera</button></div><div id="scanner-action-overlay" class="absolute inset-0 z-[100] hidden flex-col items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm transition-all duration-300"></div></div><div id="scanner-idle" class="mt-6 hidden"><div class="flex items-center justify-center gap-3 text-slate-400 font-bold uppercase tracking-widest text-sm bg-slate-50 py-3 rounded-xl border border-slate-200 shadow-inner"><i class="fas fa-qrcode animate-pulse"></i> Menunggu Scan...</div></div></div>
                 </div>
+                
                 <div id="view-manual" class="view-section hidden flex-col p-4 md:p-8"></div>
                 <div id="view-rekap" class="view-section hidden flex-col p-4 md:p-8">
                     <div class="flex flex-col md:flex-row justify-between mb-6 gap-4">
@@ -1184,9 +1437,8 @@
 
                         <div class="border-t pt-6 bg-slate-50 p-6 rounded-xl border-dashed border-2 border-slate-300 mt-6">
                             <h3 class="font-black text-xl text-slate-800 mb-2"><i class="fas fa-stamp text-orange-500 mr-2"></i> Logo Kop Surat (Laporan Resmi)</h3>
-                            <p class="text-sm text-gray-600 mb-6 font-medium">Jika saat reset muncul ikon "Gambar Rusak", berarti jaringan Bapak memblokir link internetnya. Silakan unggah ulang gambar dari HP Bapak!</p>
                             
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                                 <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 text-center flex flex-col">
                                     <label class="block text-sm font-black text-slate-700 mb-3 uppercase flex-shrink-0">Kiri (Logo Pemda)</label>
                                     <div id="preview-logo-kiri" class="flex-1 flex items-center justify-center overflow-hidden"></div>
@@ -1204,18 +1456,22 @@
 
                         <div class="border-t pt-6 bg-slate-50 p-6 rounded-xl border-dashed border-2 border-slate-300">
                             <h3 class="font-black text-xl text-slate-800 mb-2"><i class="fas fa-paint-brush text-purple-600 mr-2"></i> Desain Latar ID Card Kustom (Lanyard)</h3>
-                            <p class="text-sm text-gray-600 mb-6 font-medium">Unggah gambar desain kosongan (tanpa foto dan nama siswa) di sini. Pastikan Resolusinya Ultra HD. Sistem akan meletakkan <b>Foto Transparan, Nama, dan Barcode</b> dengan sangat presisi di atas gambar ini.</p>
+                            <p class="text-sm text-gray-600 mb-6 font-medium">Unggah gambar desain kosongan (tanpa foto dan nama siswa) di sini. Sistem akan meletakkan <b>Foto Transparan, Nama, dan Barcode</b> dengan sangat presisi di atas gambar ini.</p>
                             
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 text-center flex flex-col">
-                                    <label class="block text-sm font-black text-slate-700 mb-3 uppercase flex-shrink-0">🖼️ Desain Kartu DEPAN</label>
-                                    <div id="preview-bg-front" class="flex-1 flex items-center justify-center overflow-hidden"></div>
-                                    <input type="file" onchange="handleImageUpload(event, 'cardBgFront')" accept="image/*" class="text-xs w-full mt-4 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 flex-shrink-0">
+                                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 text-center flex flex-col">
+                                    <label class="block text-sm font-black text-slate-700 mb-4 uppercase flex-shrink-0 tracking-wide">🖼️ Desain Kartu DEPAN</label>
+                                    <div id="preview-bg-front" class="flex-1 flex items-center justify-center w-full h-48 overflow-hidden bg-slate-50 rounded-xl"></div>
+                                    <input type="file" id="upload-bg-front" onchange="handleImageUpload(event, 'cardBgFront')" accept="image/*" class="hidden">
+                                    <label for="upload-bg-front" class="cursor-pointer text-sm w-full mt-5 py-3 px-4 rounded-full font-bold bg-purple-600 text-white hover:bg-purple-700 transition shadow-md"><i class="fas fa-upload mr-2"></i> Pilih File Gambar</label>
+                                    <button type="button" id="btn-reset-front" onclick="resetBg('cardBgFront')" class="text-xs w-full mt-3 py-2 px-4 rounded-lg border border-slate-200 text-slate-500 font-bold bg-slate-50 hover:bg-red-50 hover:text-red-500 hover:border-red-200 flex-shrink-0 transition duration-300"><i class="fas fa-trash mr-1"></i> Kosongkan Desain</button>
                                 </div>
-                                <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 text-center flex flex-col">
-                                    <label class="block text-sm font-black text-slate-700 mb-3 uppercase flex-shrink-0">🖼️ Desain Kartu BELAKANG</label>
-                                    <div id="preview-bg-back" class="flex-1 flex items-center justify-center overflow-hidden"></div>
-                                    <input type="file" onchange="handleImageUpload(event, 'cardBgBack')" accept="image/*" class="text-xs w-full mt-4 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 flex-shrink-0">
+                                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 text-center flex flex-col">
+                                    <label class="block text-sm font-black text-slate-700 mb-4 uppercase flex-shrink-0 tracking-wide">🖼️ Desain Kartu BELAKANG</label>
+                                    <div id="preview-bg-back" class="flex-1 flex items-center justify-center w-full h-48 overflow-hidden bg-slate-50 rounded-xl"></div>
+                                    <input type="file" id="upload-bg-back" onchange="handleImageUpload(event, 'cardBgBack')" accept="image/*" class="hidden">
+                                    <label for="upload-bg-back" class="cursor-pointer text-sm w-full mt-5 py-3 px-4 rounded-full font-bold bg-purple-600 text-white hover:bg-purple-700 transition shadow-md"><i class="fas fa-upload mr-2"></i> Pilih File Gambar</label>
+                                    <button type="button" id="btn-reset-back" onclick="resetBg('cardBgBack')" class="text-xs w-full mt-3 py-2 px-4 rounded-lg border border-slate-200 text-slate-500 font-bold bg-slate-50 hover:bg-red-50 hover:text-red-500 hover:border-red-200 flex-shrink-0 transition duration-300"><i class="fas fa-trash mr-1"></i> Kosongkan Desain</button>
                                 </div>
                             </div>
                         </div>
