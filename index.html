@@ -154,6 +154,7 @@
 
         window.appState = {
             user: null, currentView: 'dashboard', students: [], teachers: [], grades: {}, descriptions: {}, thresholds: {}, sidebarOpen: false, attendance: {},
+            bukuSaku: {}, // TEMPAT PENYIMPANAN SEMENTARA RADAR BUKU SAKU
             settings: {
                 schoolName: "SD NEGERI 06 MANADO", schoolAddress: "Jl. Sarapung No 24 Kec. Wenang Utara Kota Manado", academicYear: "2026/2027", semester: "Ganjil",
                 reportTitle: "LAPORAN HASIL BELAJAR", midReportTitle: "SUMATIF LINGKUP MATERI SEMESTER GANJIL", headmasterName: "Dr. Dra. Hj. Fatimah M., M.Pd", headmasterNip: "19750817 199903 1 005", printDate: "Manado, 18 Desember 2026", midPrintDate: "Manado, 24 Oktober 2026",
@@ -210,7 +211,13 @@
         }
 
         function listenToCloudDatabase() {
+            // Laci Utama (E-Rapot)
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
+            // Laci Absensi Harian (Dari Aplikasi Absensi)
+            const attRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_attendance', 'data');
+            // Laci Buku Saku Digital (Dari Aplikasi Absensi)
+            const bukuRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_bukuSaku', 'data');
+
             onSnapshot(docRef, (snap) => {
                 UI.hideLoading();
                 if (snap.exists()) {
@@ -229,7 +236,6 @@
                     }
 
                     appState.students = data.students || appState.students;
-                    appState.attendance = data.attendance || appState.attendance; // MENGAMBIL DATA ABSENSI HARIAN
                     if (data.teachers && data.teachers.length > 0) appState.teachers = data.teachers; else initMocks();
                     appState.descriptions = data.descriptions || appState.descriptions;
                     appState.thresholds = data.thresholds || appState.thresholds;
@@ -268,6 +274,21 @@
                     console.warn("Menerima Snapshot kosong. Menunggu data server atau aksi pengguna...");
                 }
             }, (error) => { console.error("Snapshot error:", error); initMocks(); });
+
+            // PANTAU LACI ABSENSI
+            onSnapshot(attRef, (snap) => {
+                if (snap.exists() && snap.data().attendance) {
+                    appState.attendance = snap.data().attendance;
+                    if(appState.user && appState.currentView === 'non-akademik') loadNonAkademikTable();
+                }
+            });
+
+            // PANTAU LACI BUKU SAKU DIGITAL (BARU!)
+            onSnapshot(bukuRef, (snap) => {
+                if (snap.exists() && snap.data().bukuSaku) {
+                    appState.bukuSaku = snap.data().bukuSaku;
+                }
+            });
         }
 
         // 🚀 SISTEM PENYIMPANAN CERDAS (ANTI HILANG DATA)
@@ -890,13 +911,15 @@
             if (appState.user.role === 'Wali Kelas') classOptions = `<option value="${appState.user.assignedClass}">${appState.user.assignedClass}</option>`;
             else { classOptions = '<option value="">-- Pilih Kelas --</option>'; SCHOOL_DATA.classes.forEach(c => classOptions += `<option value="${c}">Kelas ${c}</option>`); }
 
+            // TAMBAHAN: Tombol Ajaib "Tarik Poin Buku Saku" di menu Penilaian Sikap
             let content = `
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 no-print gap-4">
                     <div>
                         <h2 class="text-2xl font-bold text-gray-800 font-russo tracking-wide">Input Penilaian Sikap Siswa</h2>
-                        <p class="text-gray-500 text-sm mt-1">Nilai otomatis terhubung dan dirata-rata di Nilai Akhir Akademik.</p>
+                        <p class="text-gray-500 text-sm mt-1">Gunakan tombol Tarik Poin Buku Saku untuk mengisi nilai secara otomatis.</p>
                     </div>
                     <div class="flex flex-wrap gap-2 w-full md:w-auto">
+                        <button onclick="tarikDataBukuSaku()" class="flex-1 md:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center transition font-semibold text-sm hover:scale-105"><i class="fas fa-magic mr-2"></i> Tarik Poin Buku Saku</button>
                         <button onclick="downloadExcelSikap()" class="flex-1 md:flex-none justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center transition font-semibold text-sm"><i class="fas fa-file-excel mr-2"></i> Unduh Excel</button>
                         <button onclick="printPDFSikap()" class="flex-1 md:flex-none justify-center bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center transition font-semibold text-sm"><i class="fas fa-file-pdf mr-2"></i> Cetak PDF</button>
                     </div>
@@ -933,6 +956,43 @@
             UI.html('view-nilai-sikap', content);
             if(document.getElementById('filter-class-sikap')) handleClassChangeSikap();
         }
+
+        // MESIN OTOMATIS BUKU SAKU
+        window.tarikDataBukuSaku = () => {
+            const cls = UI.val('filter-class-sikap');
+            const sub = UI.val('filter-subject-sikap');
+            if(!cls || !sub) { UI.toast("Pilih kelas dan mapel terlebih dahulu!", "error"); return; }
+            
+            let stds = appState.students.filter(s => s.class === cls);
+            if(stds.length === 0) return;
+
+            let count = 0;
+            stds.forEach(s => {
+                let poin = 100; // Modal Awal
+                if (appState.bukuSaku && appState.bukuSaku[s.id]) {
+                    appState.bukuSaku[s.id].forEach(record => {
+                        poin += record.points;
+                    });
+                }
+                
+                // Pastikan nilai tidak lebih dari 100 dan tidak minus
+                let finalScore = Math.min(100, Math.max(0, poin));
+
+                const fields = ['disiplin', 'tanggungjawab', 'jujur', 'peduli', 'kesopanan'];
+                fields.forEach(f => {
+                    appState.grades[`${s.id}_${sub}_sikap_${f}`] = finalScore;
+                });
+                
+                recalculateAverage(s.id, sub);
+                count++;
+            });
+
+            if (count > 0) {
+                saveDataToCloud('grades');
+                loadSikapTable();
+                UI.toast(`Ajaib! Data Buku Saku untuk ${count} siswa berhasil ditarik otomatis!`, "success");
+            }
+        };
 
         window.handleClassChangeSikap = () => {
             const cls = UI.val('filter-class-sikap'); const subSelect = document.getElementById('filter-subject-sikap');
@@ -1844,17 +1904,13 @@
         
         // PENCEGAHAN TINGKAT TINGGI: RESET DATABASE HARUS MENGETIK PASSWORD
         window.resetDatabase = () => { 
-            const pass = prompt("🚨 PERINGATAN SUPER BERBAHAYA! 🚨\n\nTindakan ini akan MENGHAPUS PERMANEN seluruh nama siswa dan nilai dari server. Data yang terhapus TIDAK BISA kembali.\n\nJika Anda benar-benar yakin dan sadar, ketik kata di bawah ini dengan huruf besar semua:\n\nHAPUS SEMUA");
-            
-            if (pass === "HAPUS SEMUA") {
+            UI.confirm('🚨 PERINGATAN BERBAHAYA! 🚨<br><br>Tindakan ini akan MENGHAPUS PERMANEN seluruh nama siswa dan nilai. Yakin ingin melanjutkan?', () => {
                 appState.students = []; 
                 appState.grades = {}; 
                 saveDataToCloud('all'); 
                 UI.toast('Database Dikosongkan!', 'success'); 
                 setTimeout(() => window.location.reload(), 1500);
-            } else if (pass !== null) {
-                UI.toast('Penghapusan dibatalkan. Kata kunci salah.', 'error');
-            }
+            });
         };
 
         function renderRekapitulasi() {
@@ -2312,7 +2368,6 @@
     
     <div id="teacher-modal" class="fixed inset-0 bg-black/70 z-[60] hidden flex-col items-center justify-center"><div class="bg-white rounded-2xl w-full max-w-md"><div class="bg-slate-900 text-white p-4 flex justify-between"><h3 id="teacher-modal-title" class="font-bold">Tambah</h3><button onclick="closeTeacherModal()"><i class="fas fa-times"></i></button></div><form id="form-teacher" onsubmit="saveTeacher(event)" class="p-6 space-y-4"><input type="text" id="t-name" required class="w-full border p-3" placeholder="Nama & Gelar"><input type="text" id="t-nip" required class="w-full border p-3" placeholder="NIP"><div class="flex gap-4"><input type="text" id="t-username" required placeholder="Username" class="flex-1 border p-3"><select id="t-role" required onchange="toggleTeacherRoleFields()" class="flex-1 border p-3"><option value="Wali Kelas">Wali Kelas</option><option value="Guru Mapel">Guru Mapel</option><option value="Kepsek">Pimpinan</option><option value="Admin">Administrator</option><option value="Petugas Piket">Petugas Piket</option><option value="Satpam">Satpam (Keamanan)</option></select></div><div id="wrap-t-class" class="hidden"><select id="t-class" class="w-full border p-3"></select></div><div id="wrap-t-subject" class="hidden"><select id="t-subject" class="w-full border p-3"></select></div><div class="flex gap-3"><button type="button" onclick="closeTeacherModal()" class="flex-1 bg-gray-200 p-3">Batal</button><button type="submit" class="flex-1 bg-blue-600 text-white p-3">Simpan</button></div></form></div></div>
 
-    <!-- Login Screen -->
     <div id="login-screen" class="flex-1 flex items-center justify-center relative overflow-hidden bg-slate-900 p-4">
         <div id="login-screen-bg" class="absolute inset-0 bg-cover bg-center opacity-65 transition-all"></div><div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-slate-900/10"></div>
         <div class="relative glass-dark p-6 sm:p-10 rounded-3xl w-full max-w-md z-10 animate-fade-in border-t border-blue-500/50">
