@@ -13,7 +13,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
     
     <script>
         tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'], poppins: ['Poppins', 'sans-serif'], russo: ['Russo One', 'sans-serif'], montserrat: ['Montserrat', 'sans-serif'] } } } }
@@ -74,12 +73,46 @@
 
         window.appState = {
             user: null, sidebarOpen: false, students: [], grades: {}, attendance: {}, settings: {}, teachers: [],
-            bukuSaku: {}, // Database Buku Saku
+            bukuSaku: {}, 
             scannedStudent: null, html5QrcodeScanner: null, currentView: 'scanner', scannerMode: 'absensi', isProcessingScan: false
         };
 
         window.currentFacingMode = "environment";
         window.currentUploadStudentId = null;
+
+        // --- SISTEM PENANGKAP BARCODE FISIK (USB SCANNER) ---
+        let hardwareScannerBuffer = "";
+        let hardwareScannerTimeout = null;
+
+        document.addEventListener('keydown', function(e) {
+            // Jangan tangkap jika guru sedang mengetik di form pencarian atau input manual
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // Jika alat scanner menekan "Enter" (Tanda scan selesai)
+            if (e.key === 'Enter') {
+                if (hardwareScannerBuffer.length > 0) {
+                    if (appState.currentView === 'scanner' && !window.isProcessingScan) {
+                        window.isProcessingScan = true;
+                        processScan(hardwareScannerBuffer); // Proses ID yang didapat
+                    }
+                    hardwareScannerBuffer = ''; // Kosongkan memori alat
+                }
+                return;
+            }
+
+            // Tangkap karakter yang diketik alat
+            if (e.key.length === 1) {
+                hardwareScannerBuffer += e.key;
+                
+                // Alat scanner mengetik sangat cepat (biasanya di bawah 50 milidetik per huruf).
+                // Jika jeda antar ketikan lebih dari 100ms, berarti itu manusia yang mengetik, hapus memori!
+                clearTimeout(hardwareScannerTimeout);
+                hardwareScannerTimeout = setTimeout(() => {
+                    hardwareScannerBuffer = '';
+                }, 100); 
+            }
+        });
+        // ----------------------------------------------------
 
         const UI = {
             show: (id) => document.getElementById(id)?.classList.remove('hidden'),
@@ -130,7 +163,7 @@
                 if (snap.exists()) {
                     const data = snap.data();
                     appState.students = data.students || [];
-                    appState.bukuSaku = data.bukuSaku || {}; // Tarik data Buku Saku
+                    appState.bukuSaku = data.bukuSaku || {}; 
                     
                     if (!appState.settings) appState.settings = {};
                     let mainSettings = data.settings || {};
@@ -166,7 +199,6 @@
                 }
             });
 
-            // Brankas Khusus (Desain Kartu)
             const assetRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_assets', 'backgrounds');
             onSnapshot(assetRef, (snap) => {
                 if (snap.exists()) {
@@ -277,8 +309,6 @@
             });
             UI.show(`view-${viewName}`);
             
-            // Hentikan kamera jika pindah ke menu BUKAN scanner, ATAU jika pindah MODE di dalam scanner.
-            // (Lebih aman hentikan dulu lalu nyalakan manual agar tidak bingung).
             if (appState.html5QrcodeScanner) {
                 appState.html5QrcodeScanner.stop().then(() => {
                     appState.html5QrcodeScanner.clear(); appState.html5QrcodeScanner = null; 
@@ -293,57 +323,6 @@
             if (viewName === 'siswa') renderDataSiswa();
             if (viewName === 'pengaturan') renderPengaturan();
             closeSidebar();
-        }
-
-        let googleAISegmenter = null;
-
-        async function removePhotoBackground(sourceCanvas) {
-            try {
-                if (typeof SelfieSegmentation !== 'undefined') {
-                    if (!googleAISegmenter) {
-                        googleAISegmenter = new SelfieSegmentation({
-                            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
-                        });
-                        googleAISegmenter.setOptions({ modelSelection: 1 });
-                    }
-                    
-                    const aiCanvas = await new Promise((resolve, reject) => {
-                        const timeout = setTimeout(() => reject(new Error("Timeout AI")), 10000);
-                        googleAISegmenter.onResults((results) => {
-                            clearTimeout(timeout);
-                            const out = document.createElement('canvas');
-                            out.width = sourceCanvas.width;
-                            out.height = sourceCanvas.height;
-                            const ctx = out.getContext('2d');
-                            ctx.save();
-                            ctx.clearRect(0, 0, out.width, out.height);
-                            ctx.drawImage(results.segmentationMask, 0, 0, out.width, out.height);
-                            ctx.globalCompositeOperation = 'source-in';
-                            ctx.drawImage(results.image, 0, 0, out.width, out.height);
-                            ctx.restore();
-                            resolve(out);
-                        });
-                        googleAISegmenter.send({ image: sourceCanvas }).catch(reject);
-                    });
-                    return aiCanvas;
-                }
-            } catch (err) {
-                console.warn("Beralih ke Mesin Pemotong Pixel Lokal...", err);
-            }
-
-            // Fallback Local Background Removal
-            const out = document.createElement('canvas'); out.width = sourceCanvas.width; out.height = sourceCanvas.height; const ctx = out.getContext('2d'); ctx.drawImage(sourceCanvas, 0, 0);
-            const imgData = ctx.getImageData(0, 0, out.width, out.height); const data = imgData.data; const w = out.width; const h = out.height;
-            const sampleCoords = [[2, 2], [w - 3, 2], [Math.floor(w / 2), 2], [2, Math.floor(h * 0.25)], [w - 3, Math.floor(h * 0.25)], [2, Math.floor(h * 0.5)], [w - 3, Math.floor(h * 0.5)]]; let bgSamples = [];
-            sampleCoords.forEach(([sx, sy]) => { const idx = (sy * w + sx) * 4; if (data[idx + 3] > 128) { bgSamples.push([data[idx], data[idx + 1], data[idx + 2]]); } });
-            const colorDistance = (r1, g1, b1, r2, g2, b2) => { const rmean = (r1 + r2) / 2; const dr = r1 - r2; const dg = g1 - g2; const db = b1 - b2; return Math.sqrt((((512 + rmean) * dr * dr) >> 8) + 4 * dg * dg + (((767 - rmean) * db * db) >> 8)); };
-            const TOLERANCE = 95; const isBgPixel = (idx) => { const r = data[idx], g = data[idx + 1], b = data[idx + 2]; for (let s of bgSamples) { if (colorDistance(r, g, b, s[0], s[1], s[2]) <= TOLERANCE) return true; } return false; };
-            const visited = new Uint8Array(w * h); const isBgMask = new Uint8Array(w * h); const queue = new Int32Array(w * h); let qHead = 0, qTail = 0;
-            const pushQueue = (x, y) => { if (x < 0 || x >= w || y < 0 || y >= h) return; const pos = y * w + x; if (visited[pos]) return; visited[pos] = 1; if (isBgPixel(pos * 4)) { isBgMask[pos] = 1; queue[qTail++] = pos; } };
-            for (let x = 0; x < w; x++) pushQueue(x, 0); for (let y = 0; y < Math.floor(h * 0.85); y++) { pushQueue(0, y); pushQueue(w - 1, y); }
-            while (qHead < qTail) { const pos = queue[qHead++]; const cx = pos % w; const cy = (pos - cx) / w; pushQueue(cx + 1, cy); pushQueue(cx - 1, cy); pushQueue(cx, cy + 1); pushQueue(cx, cy - 1); }
-            for (let y = 0; y < h; y++) { for (let x = 0; x < w; x++) { const pos = y * w + x; const idx = pos * 4; if (isBgMask[pos]) { data[idx + 3] = 0; } else { let bgNeighbors = 0; if (x > 0 && isBgMask[pos - 1]) bgNeighbors++; if (x < w - 1 && isBgMask[pos + 1]) bgNeighbors++; if (y > 0 && isBgMask[pos - w]) bgNeighbors++; if (y < h - 1 && isBgMask[pos + w]) bgNeighbors++; if (bgNeighbors > 0) { data[idx + 3] = Math.round(data[idx + 3] * (1 - bgNeighbors * 0.2)); } } } }
-            ctx.putImageData(imgData, 0, 0); return out;
         }
 
         window.handleImageUpload = async (event, type) => {
@@ -361,11 +340,9 @@
                 img.onload = async () => {
                     const canvas = document.createElement('canvas');
                     
-                    // KOMPRESI PINTAR
                     let MAX_DIMENSION = 500; 
                     if (type === 'student') MAX_DIMENSION = 300; 
                     if (type === 'kopLogoKiri' || type === 'kopLogoKanan') MAX_DIMENSION = 300; 
-                    // 🚀 KEMBALIKAN KE RESOLUSI ULTRA HD KHUSUS DESAIN KARTU (KARENA SUDAH DI BRANKAS KHUSUS)
                     if (type === 'cardBgFront' || type === 'cardBgBack') MAX_DIMENSION = 1200; 
                     
                     let width = img.width; let height = img.height;
@@ -379,7 +356,6 @@
                         if(loader) loader.querySelector('p').innerText = "☁️ MENGIRIM KE CLOUD...";
                         let finalUrl = null;
                         
-                        // 🚀 PENYELAMATAN BRANKAS KHUSUS (TIDAK PAKAI IMGBB, BYPASS INTERNET, ANTI-GAGAL)
                         if (type === 'cardBgFront' || type === 'cardBgBack') {
                             finalUrl = `data:${mime};base64,` + base64Data;
                             try {
@@ -391,10 +367,9 @@
                                 UI.toast("Desain berhasil disimpan permanen!", "success");
                             } catch(e) { console.error(e); UI.toast("Gagal menyimpan desain ke server.", "error"); }
                             if(loader) loader.classList.add('hidden');
-                            return; // KELUAR AGAR TIDAK MENGGANGGU BUKU UTAMA
+                            return; 
                         }
 
-                        // Untuk Logo & Foto Siswa, tetap pakai ImgBB
                         try {
                             let apiKeys = [];
                             if (appState.settings.imgbbApiKey && appState.settings.imgbbApiKey.trim() !== "") apiKeys.push(appState.settings.imgbbApiKey.trim());
@@ -426,15 +401,8 @@
                     let mimeType = (type === 'cardBgFront' || type === 'cardBgBack') ? 'image/jpeg' : (type === 'student' || type === 'kopLogoKiri' || type === 'kopLogoKanan') ? 'image/png' : 'image/jpeg';
                     let quality = (type === 'cardBgFront' || type === 'cardBgBack') ? 0.9 : (mimeType === 'image/jpeg' ? 0.5 : undefined); 
 
-                    if (type === 'student') {
-                        if(loader) loader.querySelector('p').innerHTML = "🤖 MENGHAPUS LATAR BELAKANG FOTO...<br><span style='font-size:11px; font-weight:normal; letter-spacing:0;'>(Mohon tunggu 2-5 detik)</span>";
-                        const cleanCanvas = await removePhotoBackground(canvas);
-                        const base64Data = cleanCanvas.toDataURL(mimeType, quality).split(',')[1];
-                        await processUpload(base64Data, mimeType);
-                    } else {
-                        const base64Data = canvas.toDataURL(mimeType, quality).split(',')[1];
-                        await processUpload(base64Data, mimeType);
-                    }
+                    const base64Data = canvas.toDataURL(mimeType, quality).split(',')[1];
+                    await processUpload(base64Data, mimeType);
                 };
                 img.src = e.target.result;
             };
@@ -470,8 +438,8 @@
                 if(qrEl) new QRCode(qrEl, { text: s.id, width: 125, height: 125, colorDark : "#7f1d1d", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
             });
     
-            setTimeout(() => { window.print(); }, 2000);
             window.onafterprint = () => { container.classList.add('hidden', 'no-print'); container.style.display = 'none'; window.onafterprint = null; };
+            setTimeout(() => { window.print(); }, 2000);
         };
 
         window.printLaporanResmi = () => {
@@ -498,8 +466,8 @@
             let html = `<div style="padding: 20px; font-family: 'Times New Roman', Times, serif; color: black; background: white; width: 100%; box-sizing: border-box;"><div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 4px double black; padding-bottom: 15px; margin-bottom: 25px;"><img src="${logoManado}" style="width: 85px; height: 85px; object-fit: contain;"><div style="flex: 1; text-align: center; padding: 0 15px;"><h2 style="margin: 0; font-size: 20px; font-weight: bold; text-transform: uppercase;">PEMERINTAH KOTA MANADO</h2><h2 style="margin: 0; font-size: 20px; font-weight: bold; text-transform: uppercase;">DINAS PENDIDIKAN DAN KEBUDAYAAN</h2><h1 style="margin: 5px 0; font-size: 26px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px;">${schoolName}</h1><p style="margin: 0; font-size: 14px; font-style: italic;">Sistem Laporan Rekapitulasi Kehadiran Digital Terintegrasi E-Rapot</p></div><img src="${logoTutWuri}" style="width: 85px; height: 85px; object-fit: contain;"></div><div style="text-align: center; margin-bottom: 25px;"><h3 style="margin: 0; text-decoration: underline; font-size: 16px; text-transform: uppercase; font-weight: bold;">REKAPITULASI KEHADIRAN BULAN ${monthName.toUpperCase()} ${year}</h3><p style="margin: 8px 0 0 0; font-size: 14px;">Kelas: <b>${cls === 'ALL' ? 'Semua Kelas' : cls}</b></p></div><div style="width: 100%; margin-bottom: 30px;">${tableHtml}</div><div style="display: flex; justify-content: space-between; margin-top: 40px; padding: 0 40px;"><div style="text-align: center;"><p style="margin: 0;">Mengetahui,</p><p style="margin: 0; margin-bottom: 80px;">Kepala Sekolah</p><p style="margin: 0; font-weight: bold; text-decoration: underline;">${namaKepsek}</p><p style="margin: 5px 0 0 0;">NIP. ${nipKepsek}</p></div><div style="text-align: center;"><p style="margin: 0;">Manado, ${new Date().getDate()} ${monthName} ${year}</p><p style="margin: 0; margin-bottom: 80px;">Wali Kelas ${cls === 'ALL' ? '' : cls}</p><p style="margin: 0; font-weight: bold; text-decoration: underline;">${namaWali}</p><p style="margin: 5px 0 0 0;">NIP. ${nipWali}</p></div></div></div>`;
 
             container.innerHTML = html; container.classList.remove('hidden', 'no-print'); container.style.display = 'block'; 
-            setTimeout(() => { window.print(); }, 1500);
             window.onafterprint = () => { container.classList.add('hidden', 'no-print'); container.style.display = 'none'; container.innerHTML = ''; window.onafterprint = null; };
+            setTimeout(() => { window.print(); }, 1500);
         };
 
         window.cetakPiagam = (studentId, rankCount, monthName) => {
@@ -516,8 +484,8 @@
 
             container.innerHTML = html; container.classList.remove('hidden', 'no-print'); container.style.display = 'block';
             let style = document.createElement('style'); style.innerHTML = '@page { size: A4 landscape; margin: 0; }'; document.head.appendChild(style);
-            setTimeout(() => { window.print(); }, 1500);
             window.onafterprint = () => { container.classList.add('hidden', 'no-print'); container.style.display = 'none'; container.innerHTML = ''; document.head.removeChild(style); window.onafterprint = null; };
+            setTimeout(() => { window.print(); }, 1500);
         };
 
         function renderDashboard() {
@@ -579,7 +547,6 @@
             let tzoffset = (new Date()).getTimezoneOffset() * 60000; const todayKey = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
             let countHadir = 0, countTelat = 0, countSakit = 0, countIzin = 0, countAlpa = 0, belumAbsenList = [];
             
-            // Perhitungan Buku Saku
             let characterList = [];
 
             targetStds.forEach(s => {
@@ -588,7 +555,6 @@
                     if(stat === 'Hadir') countHadir++; else if(stat === 'Terlambat') countTelat++; else if(stat === 'Sakit') countSakit++; else if(stat === 'Izin') countIzin++; else if(stat === 'Alpa') countAlpa++;
                 } else { belumAbsenList.push({ student: s, status: 'Belum Absen' }); }
                 
-                // Menghitung poin tiap anak
                 let poin = 100;
                 if (appState.bukuSaku && appState.bukuSaku[s.id]) {
                     appState.bukuSaku[s.id].forEach(h => poin += h.points);
@@ -614,11 +580,10 @@
             let htmlTelat = ''; telatArr.slice(0, 5).forEach((t, i) => { htmlTelat += `<tr class="hover:bg-yellow-50"><td class="p-3 font-bold text-gray-800 text-xs">${t.name} <span class="text-[10px] text-gray-400 block">${t.class}</span></td><td class="p-3 text-center"><span class="border px-2 py-0.5 rounded text-xs font-black bg-orange-100 text-orange-700">${t.count}x</span></td></tr>`; });
             if(htmlTelat === '') htmlTelat = `<tr><td colspan="2" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50 h-32">Belum ada riwayat telat.</td></tr>`; document.getElementById('dash-table-telat').innerHTML = htmlTelat;
 
-            // Render Dashboard Buku Saku
             characterList.sort((a, b) => b.poin - a.poin);
             let htmlTop = '';
             characterList.slice(0, 5).forEach(c => {
-                if(c.poin <= 100) return; // Hanya tunjukkan yang di atas 100 (prestasi)
+                if(c.poin <= 100) return; 
                 htmlTop += `<tr class="hover:bg-blue-50"><td class="p-3 font-bold text-gray-800 text-xs">${c.student.name} <span class="text-[10px] text-gray-400 block">${c.student.class}</span></td><td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-black">⭐ ${c.poin}</span></td></tr>`;
             });
             if (htmlTop === '') htmlTop = `<tr><td colspan="2" class="p-6 text-center text-gray-400 font-bold bg-slate-50 h-32">Belum ada yang mencetak prestasi poin tambahan.</td></tr>`;
@@ -631,7 +596,6 @@
             });
             if (htmlBottom === '') htmlBottom = `<tr><td colspan="2" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50 h-32"><i class="fas fa-check-circle mr-1"></i> Semua siswa berkarakter baik (Poin aman).</td></tr>`;
             if (document.getElementById('dash-table-bottom-karakter')) document.getElementById('dash-table-bottom-karakter').innerHTML = htmlBottom;
-
 
             let currentMonth = todayKey.substring(0, 7); let monthName = new Date(todayKey).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }); let activeDaysCount = 0; let hariAktif = {}; 
             for(let date in appState.attendance) { if(date.startsWith(currentMonth)) { hariAktif[date] = true; } } activeDaysCount = Object.keys(hariAktif).length;
@@ -669,7 +633,6 @@
             const updateTime = () => { const timeEl = document.getElementById('scanner-time'); if (timeEl) { let timeString = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); timeEl.innerText = timeString.replace(/\./g, ':'); } };
             updateTime(); window.clockInterval = setInterval(updateTime, 1000); 
 
-            // UI changes based on Mode (Absensi or Buku Saku)
             const isBukuSaku = window.scannerMode === 'bukusaku';
             const titleEl = document.getElementById('scanner-title');
             const subtitleEl = document.getElementById('scanner-subtitle');
@@ -679,7 +642,7 @@
                 if(subtitleEl) subtitleEl.innerHTML = `<i class="fas fa-book mr-2 text-blue-500"></i>Scan Kartu untuk Tambah/Kurangi Poin`;
             } else {
                 if(titleEl) titleEl.innerHTML = `ABSENSI <span class="text-emerald-500">KEHADIRAN</span>`;
-                if(subtitleEl) subtitleEl.innerHTML = `<i class="fas fa-qrcode mr-2 text-emerald-500"></i>Arahkan Kartu QR Siswa ke Kamera`;
+                if(subtitleEl) subtitleEl.innerHTML = `<i class="fas fa-qrcode mr-2 text-emerald-500"></i>Arahkan Kartu QR Siswa ke Kamera / Scanner`;
             }
         }
 
@@ -687,7 +650,7 @@
             UI.hide('camera-activate-btn-container'); UI.show('camera-wrapper'); UI.show('scanner-idle'); window.isProcessingScan = false;
             if(!appState.html5QrcodeScanner) { appState.html5QrcodeScanner = new Html5Qrcode("reader"); }
             const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
-            appState.html5QrcodeScanner.start({ facingMode: window.currentFacingMode }, config, (decodedText) => { if (window.isProcessingScan) return; window.isProcessingScan = true; processScan(decodedText); }, (errorMessage) => { }).catch((err) => { UI.toast("Gagal mengakses kamera. Pastikan izin aktif.", "error"); UI.show('camera-activate-btn-container'); UI.hide('camera-wrapper'); UI.hide('scanner-idle'); });
+            appState.html5QrcodeScanner.start({ facingMode: window.currentFacingMode }, config, (decodedText) => { if (window.isProcessingScan) return; window.isProcessingScan = true; processScan(decodedText); }, (errorMessage) => { }).catch((err) => { UI.toast("Kamera aktif / Siap terima Scanner USB.", "success"); UI.show('camera-activate-btn-container'); UI.hide('camera-wrapper'); UI.hide('scanner-idle'); });
         };
 
         window.switchCamera = () => {
@@ -701,11 +664,9 @@
             if (!student) { UI.toast("QR Code Tidak Dikenali!", "error"); UI.playBeep('error', 'Tidak Dikenali'); setTimeout(() => { window.isProcessingScan = false; }, 2000); return; }
             appState.scannedStudent = student; 
 
-            // Cek Mode Scanner yang sedang aktif
             if (window.scannerMode === 'bukusaku') {
                 processBukuSaku(student);
             } else {
-                // Logika Absensi Standar
                 const userSound = appState.settings.attendance?.scanSound || 'voice'; let tzoffset = (new Date()).getTimezoneOffset() * 60000; const todayKey = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
                 if (appState.attendance && appState.attendance[todayKey] && appState.attendance[todayKey][student.id]) {
                     const prevData = appState.attendance[todayKey][student.id]; UI.playBeep(userSound === 'voice' ? 'voice' : 'error', 'Sudah Absen'); UI.hide('scanner-idle');
@@ -718,7 +679,6 @@
         };
 
         window.processBukuSaku = (student) => {
-            // Hitung total poin
             let poin = 100;
             if (appState.bukuSaku && appState.bukuSaku[student.id]) {
                 appState.bukuSaku[student.id].forEach(h => poin += h.points);
@@ -791,7 +751,6 @@
             const record = { id: Date.now().toString(), date: dateKey, time: timeStr, type: type, reason: reason, points: points };
             appState.bukuSaku[studentId].push(record);
 
-            // Simpan ke Firestore
             try {
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
                 await updateDoc(docRef, { [`bukuSaku.${studentId}`]: appState.bukuSaku[studentId] });
@@ -1102,7 +1061,6 @@
                         </div>
                     </div>
                     <style>
-                        /* Styling dinamis tombol mode scanner */
                         [data-view="scanner-absensi"].bg-slate-800 ~ main #btn-mode-absen,
                         body:has([data-view="scanner-absensi"].bg-slate-800) #btn-mode-absen { --absen-bg: white; --absen-text: #059669; }
                         body:has([data-view="scanner-absensi"].bg-slate-800) #btn-mode-buku { --buku-bg: transparent; --buku-text: #64748b; }
@@ -1115,7 +1073,7 @@
                         <h2 class="text-lg md:text-xl font-bold text-slate-500 uppercase tracking-widest mb-1" id="scanner-date">Memuat...</h2>
                         <div id="scanner-time" class="text-5xl md:text-6xl font-black text-slate-800 font-russo tracking-widest drop-shadow-md mb-3">00:00:00</div>
                         <h1 id="scanner-title" class="text-2xl font-black font-russo text-slate-800 tracking-wide mb-1">ABSENSI <span class="text-emerald-500">KEHADIRAN</span></h1>
-                        <p id="scanner-subtitle" class="text-gray-500 font-medium text-sm bg-white inline-block px-4 py-2 rounded-full border shadow-sm"><i class="fas fa-qrcode mr-2 text-emerald-500"></i>Arahkan Kartu QR Siswa ke Kamera</p>
+                        <p id="scanner-subtitle" class="text-gray-500 font-medium text-sm bg-white inline-block px-4 py-2 rounded-full border shadow-sm"><i class="fas fa-qrcode mr-2 text-emerald-500"></i>Arahkan Kartu QR Siswa ke Kamera / Scanner</p>
                     </div>
                     
                     <div class="w-full max-w-lg bg-white rounded-3xl shadow-xl border p-4 md:p-6 text-center relative mx-auto">
@@ -1130,7 +1088,10 @@
                             <div id="scanner-action-overlay" class="absolute inset-0 z-[100] hidden flex-col items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm transition-all duration-300"></div>
                         </div>
                         <div id="scanner-idle" class="mt-6 hidden">
-                            <div class="flex items-center justify-center gap-3 text-slate-400 font-bold uppercase tracking-widest text-sm bg-slate-50 py-3 rounded-xl border border-slate-200 shadow-inner"><i class="fas fa-qrcode animate-pulse"></i> Menunggu Scan...</div>
+                            <div class="flex flex-col items-center justify-center gap-2 text-slate-400 font-bold uppercase tracking-widest text-sm bg-slate-50 py-3 rounded-xl border border-slate-200 shadow-inner">
+                                <div><i class="fas fa-qrcode animate-pulse"></i> Menunggu Scan...</div>
+                                <div class="text-[10px] bg-slate-200 text-slate-500 px-2 py-1 rounded">Bisa pakai Kamera atau Scanner USB</div>
+                            </div>
                         </div>
                     </div>
                 </div>
