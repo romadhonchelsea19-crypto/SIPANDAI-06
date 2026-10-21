@@ -172,6 +172,32 @@
                     const data = snap.data();
                     if (appState.students.length === 0) appState.students = data.students || [];
                     
+                    // --- SISTEM PENYELAMAT DATA LAMA (AUTO-MIGRATE) ---
+                    if (data.attendance) {
+                        let wasRecovered = false;
+                        if (!appState.attendance) appState.attendance = {};
+                        for (let date in data.attendance) {
+                            if (!appState.attendance[date]) {
+                                appState.attendance[date] = data.attendance[date];
+                                wasRecovered = true;
+                            } else {
+                                for (let sId in data.attendance[date]) {
+                                    if (!appState.attendance[date][sId]) {
+                                        appState.attendance[date][sId] = data.attendance[date][sId];
+                                        wasRecovered = true;
+                                    }
+                                }
+                            }
+                        }
+                        if (wasRecovered) {
+                            const attRefLocal = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_attendance', 'data');
+                            setDoc(attRefLocal, { attendance: appState.attendance }, { merge: true }).then(() => {
+                                console.log("Data lama berhasil ditarik ke laci baru!");
+                            });
+                        }
+                    }
+                    // ----------------------------------------------------
+
                     if (!appState.settings) appState.settings = {};
                     let mainSettings = data.settings || {};
                     for (let key in mainSettings) { if (key !== 'cardBgFront' && key !== 'cardBgBack') appState.settings[key] = mainSettings[key]; }
