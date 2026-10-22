@@ -9,10 +9,16 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700&family=Russo+One&display=swap" rel="stylesheet">
     
+    <!-- Pustaka Standar -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- MESIN BARU: Pemotret ID Card & Pembungkus ZIP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     
     <script>
         tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'], poppins: ['Poppins', 'sans-serif'], russo: ['Russo One', 'sans-serif'], montserrat: ['Montserrat', 'sans-serif'] } } } }
@@ -117,6 +123,8 @@
                 toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'} mr-2"></i> ${msg}`;
                 document.body.appendChild(toast); setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 5000);
             },
+            showLoading: () => UI.show('global-loader'),
+            hideLoading: () => UI.hide('global-loader'),
             playBeep: (type = 'beep', voiceText = 'Absen Berhasil') => {
                 if (type === 'mute') return;
                 if (type === 'voice') {
@@ -159,9 +167,7 @@
         }
 
         function listenToCloudDatabase() {
-            // LACI UTAMA
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
-            // LACI BARU (Untuk memecah beban memori)
             const attRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_attendance', 'data');
             const bukuRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_bukuSaku', 'data');
             const assetRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_assets', 'backgrounds');
@@ -172,32 +178,6 @@
                     const data = snap.data();
                     if (appState.students.length === 0) appState.students = data.students || [];
                     
-                    // --- SISTEM PENYELAMAT DATA LAMA (AUTO-MIGRATE) ---
-                    if (data.attendance) {
-                        let wasRecovered = false;
-                        if (!appState.attendance) appState.attendance = {};
-                        for (let date in data.attendance) {
-                            if (!appState.attendance[date]) {
-                                appState.attendance[date] = data.attendance[date];
-                                wasRecovered = true;
-                            } else {
-                                for (let sId in data.attendance[date]) {
-                                    if (!appState.attendance[date][sId]) {
-                                        appState.attendance[date][sId] = data.attendance[date][sId];
-                                        wasRecovered = true;
-                                    }
-                                }
-                            }
-                        }
-                        if (wasRecovered) {
-                            const attRefLocal = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_attendance', 'data');
-                            setDoc(attRefLocal, { attendance: appState.attendance }, { merge: true }).then(() => {
-                                console.log("Data lama berhasil ditarik ke laci baru!");
-                            });
-                        }
-                    }
-                    // ----------------------------------------------------
-
                     if (!appState.settings) appState.settings = {};
                     let mainSettings = data.settings || {};
                     for (let key in mainSettings) { if (key !== 'cardBgFront' && key !== 'cardBgBack') appState.settings[key] = mainSettings[key]; }
@@ -217,7 +197,6 @@
                 }
             });
 
-            // Pantau Laci Absensi Khusus
             onSnapshot(attRef, (snap) => {
                 if (snap.exists() && snap.data().attendance) {
                     appState.attendance = snap.data().attendance;
@@ -225,7 +204,6 @@
                 }
             });
 
-            // Pantau Laci Buku Saku Khusus
             onSnapshot(bukuRef, (snap) => {
                 if (snap.exists() && snap.data().bukuSaku) {
                     appState.bukuSaku = snap.data().bukuSaku;
@@ -233,7 +211,6 @@
                 }
             });
 
-            // Pantau Laci Aset Khusus
             onSnapshot(assetRef, (snap) => {
                 if (snap.exists()) {
                     const data = snap.data();
@@ -360,7 +337,6 @@
                 img.onload = async () => {
                     const canvas = document.createElement('canvas');
                     
-                    // ULTRA HD RESOLUTION FIX (1200px untuk ketajaman tinggi ID Card)
                     let MAX_DIMENSION = 1200; 
                     if (type === 'student' || type === 'kopLogoKiri' || type === 'kopLogoKanan') MAX_DIMENSION = 300; 
                     
@@ -410,6 +386,132 @@
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file); event.target.value = '';
+        };
+
+        // --- SISTEM PEMBUAT GAMBAR KARTU OFFLINE (HTML2CANVAS) ---
+        window.generateCardCanvas = async (student) => {
+            return new Promise((resolve) => {
+                let container = document.getElementById('offscreen-cards');
+                if(!container) {
+                    container = document.createElement('div');
+                    container.id = 'offscreen-cards';
+                    container.style.cssText = 'position:fixed; top:-9999px; left:-9999px; z-index:-9999;';
+                    document.body.appendChild(container);
+                }
+                container.innerHTML = ''; 
+
+                let bgFront = appState.settings.cardBgFront || '';
+                let bgBack = appState.settings.cardBgBack || '';
+
+                let cardStyle = `width: 600px; height: 960px; border-radius: 20px; position: relative; overflow: hidden; font-family: "Montserrat", sans-serif; background-color: white; background-size: 100% 100%; background-position: center; background-repeat: no-repeat; border: 2px solid #cbd5e1; box-sizing: border-box;`;
+
+                let photoSrc = student.photoUrl; 
+                let validPhoto = photoSrc && (photoSrc.startsWith('http') || photoSrc.startsWith('data:image'));
+                if(!validPhoto) photoSrc = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiB2aWV3Qm94PSIwIDAgMzAwIDQwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiNmOGZhZmMiLz48dGV4dCB4PSIxNTAiIHk9IjIwMCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM5Y2EzYWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkZvdG8gS29zb25nPC90ZXh0Pjwvc3ZnPg==';
+
+                let fontSize = 21; 
+
+                let front = document.createElement('div'); 
+                front.style.cssText = cardStyle;
+                if (bgFront) front.style.backgroundImage = `url("${bgFront}")`;
+                front.innerHTML = `
+                    <div style="position: absolute; right: 0; bottom: 0; width: 68%; height: 100%; z-index: 10; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 25px;">
+                        
+                        <div style="position: absolute; bottom: 85px; width: 100%; text-align: center; display: flex; justify-content: center; z-index: 5;">
+                            <img src="${photoSrc}" style="width: 95%; height: 580px; object-fit: contain; object-position: bottom center; filter: drop-shadow(0 8px 12px rgba(0,0,0,0.4));">
+                        </div>
+                        
+                        <div style="position: relative; background-color: #b91c1c; color: white; width: 95%; text-align: center; font-size: ${fontSize}px; font-weight: 900; text-transform: uppercase; line-height: 1.25; min-height: 60px; box-shadow: 0 -4px 10px rgba(0,0,0,0.25); z-index: 20; display: table; box-sizing: border-box;">
+                            <div style="display: table-cell; vertical-align: middle; padding: 0px 8px 20px 8px; word-wrap: break-word; white-space: normal;">
+                                ${student.name}
+                            </div>
+                        </div>
+                        
+                        <div style="position: relative; background: rgba(255,255,255,0.95); color: #111827; width: 95%; padding: 0px 5px 20px 5px; text-align: center; font-size: 19px; font-weight: 900; margin-top: 5px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); z-index: 20; letter-spacing: 0.5px; box-sizing: border-box;">
+                            NISN: ${student.nis}
+                        </div>
+                    </div>`;
+
+                let back = document.createElement('div'); 
+                back.style.cssText = cardStyle;
+                if (bgBack) back.style.backgroundImage = `url("${bgBack}")`;
+                back.innerHTML = `
+                    <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 280px; position: relative; z-index: 10; box-sizing: border-box;">
+                        <div style="background: white; padding: 15px; border-radius: 15px; border: 2px solid #e2e8f0; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+                            <div id="qr_canvas_${student.id}" style="width: 350px; height: 350px;"></div>
+                        </div>
+                    </div>`;
+
+                container.appendChild(front); 
+                container.appendChild(back);
+                
+                let qrEl = back.querySelector(`#qr_canvas_${student.id}`);
+                if(qrEl) new QRCode(qrEl, { text: student.id, width: 350, height: 350, colorDark : "#7f1d1d", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
+
+                setTimeout(async () => {
+                    const opt = { scale: 2, useCORS: true, backgroundColor: null };
+                    const canvasFront = await html2canvas(front, opt);
+                    const canvasBack = await html2canvas(back, opt);
+                    container.innerHTML = ''; 
+                    resolve({ front: canvasFront.toDataURL('image/png'), back: canvasBack.toDataURL('image/png') });
+                }, 800); 
+            });
+        };
+
+        window.downloadSinglePNG = async (id) => {
+            const student = appState.students.find(s => s.id === id);
+            if(!student) return;
+            UI.toast("Memotret Ultra HD... Mohon tunggu sebentar.", "success");
+            
+            const images = await generateCardCanvas(student);
+            
+            let linkF = document.createElement('a');
+            linkF.download = `IDCard_${student.name.replace(/[^a-zA-Z0-9]/g, '_')}_Depan.png`;
+            linkF.href = images.front;
+            linkF.click();
+
+            setTimeout(() => {
+                let linkB = document.createElement('a');
+                linkB.download = `IDCard_${student.name.replace(/[^a-zA-Z0-9]/g, '_')}_Belakang.png`;
+                linkB.href = images.back;
+                linkB.click();
+            }, 500);
+        };
+
+        window.downloadClassPNG = async () => {
+            if(typeof JSZip === 'undefined' || typeof saveAs === 'undefined') { UI.toast("Alat ZIP sedang dimuat...", "error"); return; }
+            const cls = UI.val('siswa-class-filter');
+            let stds = appState.students;
+            if(cls !== 'ALL') stds = stds.filter(s => s.class === cls);
+            if(stds.length === 0) { UI.toast("Pilih kelas spesifik dahulu", "error"); return; }
+            
+            UI.showLoading();
+            const loaderP = document.querySelector('#global-loader p');
+            
+            try {
+                let zip = new JSZip();
+                let folder = zip.folder(`ID_Card_Kelas_${cls}`);
+                
+                for(let i=0; i<stds.length; i++) {
+                    let s = stds[i];
+                    if(loaderP) loaderP.innerText = `MEMOTRET KARTU ${i+1}/${stds.length}...`;
+                    const images = await generateCardCanvas(s);
+                    let safeName = s.name.replace(/[^a-zA-Z0-9]/g, '_');
+                    folder.file(`${safeName}_Depan.png`, images.front.split(',')[1], {base64: true});
+                    folder.file(`${safeName}_Belakang.png`, images.back.split(',')[1], {base64: true});
+                }
+                
+                if(loaderP) loaderP.innerText = `MEMBUNGKUS FILE ZIP (MOHON TUNGGU)...`;
+                const content = await zip.generateAsync({type:"blob"});
+                saveAs(content, `ID_Card_Kelas_${cls}.zip`);
+                
+                UI.hideLoading();
+                UI.toast("Koper ZIP berhasil diunduh!", "success");
+            } catch (err) {
+                console.error(err);
+                UI.hideLoading();
+                UI.toast("Gagal membuat file ZIP.", "error");
+            }
         };
 
         window.printQRCodes = (studentList) => {
@@ -975,7 +1077,7 @@
             filtered.forEach((s, i) => {
                 let photoSrc = s.photoUrl; let isValidPhoto = photoSrc && (photoSrc.startsWith('http') || photoSrc.startsWith('data:image'));
                 let photoHtml = isValidPhoto ? `<img src="${photoSrc}" onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDUiIGhlaWdodD0iMTQwIiB2aWV3Qm94PSIwIDAgMTA1IDE0MCI+PHJlY3Qgd2lkdGg9IjEwNSIgaGVpZ2h0PSIxNDAiIGZpbGw9IiNlMmU4ZjAiLz48dGV4dCB4PSI1MiIgeT0iNzAiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjEwIiBmaWxsPSIjNjQ3NDhiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5FcnJvcjwvdGV4dD48L3N2Zz4=';" class="w-10 h-14 object-contain rounded shadow border border-gray-300 cursor-pointer hover:opacity-80 transition bg-[repeating-conic-gradient(#f1f5f9_0%_25%,#ffffff_0%_50%)] bg-[length:8px_8px]" onclick="triggerPhotoUpload('${s.id}')" title="Ubah Foto">` : `<div onclick="triggerPhotoUpload('${s.id}')" class="w-10 h-14 bg-slate-200 rounded flex items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-300 transition shadow border border-gray-300" title="Unggah Foto (Hapus Latar Belakang Otomatis)"><i class="fas fa-camera"></i></div>`;
-                tbody += `<tr class="hover:bg-slate-50 bg-white border-b"><td class="p-3 text-center">${i+1}</td><td class="p-3 flex justify-center">${photoHtml}</td><td class="p-3 font-semibold">${s.name}<br><span class="text-xs text-gray-500 font-mono">NISN: ${s.nis}</span></td><td class="p-3 text-center font-bold text-emerald-700 bg-emerald-50">${s.class}</td><td class="p-3"><div class="flex items-center gap-2"><i class="fab fa-whatsapp text-green-500 text-lg"></i><input type="number" id="phone_${s.id}" class="border rounded p-2 text-sm w-full md:w-48 outline-none focus:border-emerald-500 font-mono" value="${s.parentPhone || ''}" placeholder="Cth: 0812345..."><button onclick="savePhone('${s.id}')" class="bg-slate-200 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 px-3 py-2 rounded font-bold transition shadow-sm"><i class="fas fa-save"></i></button></div></td><td class="p-3 text-center"><button onclick="generateSingleQR('${s.id}')" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-print mr-1"></i> Cetak</button></td></tr>`;
+                tbody += `<tr class="hover:bg-slate-50 bg-white border-b"><td class="p-3 text-center">${i+1}</td><td class="p-3 flex justify-center">${photoHtml}</td><td class="p-3 font-semibold">${s.name}<br><span class="text-xs text-gray-500 font-mono">NISN: ${s.nis}</span></td><td class="p-3 text-center font-bold text-emerald-700 bg-emerald-50">${s.class}</td><td class="p-3"><div class="flex items-center gap-2"><i class="fab fa-whatsapp text-green-500 text-lg"></i><input type="number" id="phone_${s.id}" class="border rounded p-2 text-sm w-full md:w-48 outline-none focus:border-emerald-500 font-mono" value="${s.parentPhone || ''}" placeholder="Cth: 0812345..."><button onclick="savePhone('${s.id}')" class="bg-slate-200 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 px-3 py-2 rounded font-bold transition shadow-sm"><i class="fas fa-save"></i></button></div></td><td class="p-3 text-center"><div class="flex flex-col gap-1 items-center"><button onclick="generateSingleQR('${s.id}')" class="bg-slate-800 hover:bg-slate-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-print mr-1"></i> Cetak</button><button onclick="downloadSinglePNG('${s.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-image mr-1"></i> PNG</button></div></td></tr>`;
             });
             UI.html('siswa-tbody', tbody);
         };
@@ -1067,12 +1169,14 @@
     </script>
 
     <div id="global-loader" class="fixed inset-0 bg-slate-900/90 z-[200] flex flex-col items-center justify-center backdrop-blur-sm hidden">
-        <div class="loader mb-4"></div><p class="text-emerald-400 font-bold tracking-widest font-russo animate-pulse text-center px-4">MEMUAT...</p>
+        <div class="loader mb-4"></div><p class="text-emerald-400 font-bold tracking-widest font-russo animate-pulse text-center px-4 mt-2">MEMUAT DARI CLOUD...</p>
     </div>
 
     <!-- AREA CETAK LANYARD & PIAGAM -->
     <div id="print-area" class="hidden no-print text-center p-4"></div>
     <div id="print-report-area" class="hidden no-print text-center p-4"></div>
+    <!-- AREA RENDER PNG OFFLINE -->
+    <div id="offscreen-cards" style="position:fixed; top:-9999px; left:-9999px; z-index:-9999;"></div>
     
     <input type="file" id="student-photo-upload" accept="image/png, image/jpeg" class="hidden" onchange="handleImageUpload(event, 'student')">
 
@@ -1178,13 +1282,16 @@
                 <div id="view-siswa" class="view-section hidden flex-col p-4 md:p-8">
                     <div class="flex flex-col md:flex-row justify-between mb-6 gap-4">
                         <div><h2 class="text-2xl font-bold font-russo tracking-wide text-slate-800">Manajemen Data WA & ID Card</h2><p class="text-sm text-gray-500 mt-1">Sistem dilengkapi <b>Mesin Ganda Penghapus Background Otomatis!</b></p></div>
-                        <button onclick="generateClassQR()" class="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg transition flex items-center justify-center"><i class="fas fa-print mr-2"></i> Cetak Kartu 1 Kelas</button>
+                        <div class="flex gap-2">
+                            <button onclick="downloadClassPNG()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold shadow-lg transition flex items-center justify-center text-sm"><i class="fas fa-file-archive mr-2"></i> Unduh PNG (ZIP)</button>
+                            <button onclick="generateClassQR()" class="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl font-bold shadow-lg transition flex items-center justify-center text-sm"><i class="fas fa-print mr-2"></i> Cetak Kartu</button>
+                        </div>
                     </div>
                     <div class="bg-white p-4 rounded-xl shadow-sm border mb-4 flex flex-col sm:flex-row gap-4">
                         <select id="siswa-class-filter" onchange="loadStudentTable()" class="w-full sm:w-1/3 border p-2.5 rounded-lg font-bold bg-slate-50 outline-none"></select>
                         <input type="text" id="siswa-search" onkeyup="loadStudentTable()" placeholder="Ketik nama atau NISN..." class="w-full sm:w-2/3 border p-2.5 rounded-lg bg-white outline-none">
                     </div>
-                    <div class="bg-white rounded-xl shadow-sm border overflow-hidden flex-1 flex flex-col mb-10"><div class="table-container overflow-auto flex-1 w-full relative" style="max-height: 60vh;"><table class="min-w-max w-full text-sm text-left border-collapse bg-white"><thead class="text-xs text-white bg-slate-800 sticky top-0 z-10 shadow-md"><tr><th class="p-4 w-12 text-center">No</th><th class="p-4 w-16 text-center">Foto</th><th class="p-4">Identitas Siswa</th><th class="p-4 text-center">Kelas</th><th class="p-4">Nomor WA Orang Tua (Awali 08...)</th><th class="p-4 text-center">Cetak</th></tr></thead><tbody id="siswa-tbody" class="text-gray-700 divide-y divide-gray-100"></tbody></table></div></div>
+                    <div class="bg-white rounded-xl shadow-sm border overflow-hidden flex-1 flex flex-col mb-10"><div class="table-container overflow-auto flex-1 w-full relative" style="max-height: 60vh;"><table class="min-w-max w-full text-sm text-left border-collapse bg-white"><thead class="text-xs text-white bg-slate-800 sticky top-0 z-10 shadow-md"><tr><th class="p-4 w-12 text-center">No</th><th class="p-4 w-16 text-center">Foto</th><th class="p-4">Identitas Siswa</th><th class="p-4 text-center">Kelas</th><th class="p-4">Nomor WA Orang Tua (Awali 08...)</th><th class="p-4 text-center">Aksi Lanyard</th></tr></thead><tbody id="siswa-tbody" class="text-gray-700 divide-y divide-gray-100"></tbody></table></div></div>
                 </div>
 
                 <div id="view-pengaturan" class="view-section hidden flex-col p-4 md:p-8 overflow-y-auto mb-10">
