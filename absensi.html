@@ -332,7 +332,7 @@
         }
 
         // ==========================================
-        // KOMPRESOR LOKAL & PENGUNGGAH CERDAS (KHUSUS AGAR AMAN DI GOOGLE CLOUD)
+        // KOMPRESOR LOKAL & PENGUNGGAH
         // ==========================================
         window.handleImageUpload = async (event, type) => {
             const file = event.target.files[0];
@@ -388,7 +388,7 @@
             }
         };
 
-        // KUNCI AMAN: KOMPRES KE PNG DENGAN UKURAN MINI (350px) AGAR GOOGLE MENERIMA
+        // KUNCI AMAN: KOMPRES KE PNG DENGAN UKURAN MINI (350px)
         window.resizeImageLocally = (blob, type) => {
             return new Promise((resolve) => {
                 const reader = new FileReader();
@@ -421,7 +421,6 @@
         // ==========================================
         // KOORDINAT ABSOLUT: DESAIN ID CARD (DIKUNCI MATI)
         // DENGAN JALUR TOL CDN (wsrv.nl) DAN PENYELIPAN BAJU BAWAH
-        // TULISAN DINAIKKAN PAS TENGAH DAN HASIL PNG ULTRA HD
         // ==========================================
         window.generateCardCanvas = async (student) => {
             return new Promise(async (resolve) => {
@@ -438,7 +437,7 @@
 
                 let cardStyle = `width: 600px; height: 960px; border-radius: 20px; position: relative; overflow: hidden; font-family: "Montserrat", sans-serif; background-color: white; background-size: 100% 100%; background-position: center; background-repeat: no-repeat; border: 2px solid #cbd5e1; box-sizing: border-box;`;
 
-                // JALUR TOL CDN UNTUK MENGHINDARI BLOKIR CORS (MENGGUNAKAN PNG BENING)
+                // JALUR TOL CDN UNTUK MENGHINDARI BLOKIR CORS DARI IMGBB
                 let rawPhotoSrc = student.photoUrl || '';
                 let photoSrc = '';
                 
@@ -455,21 +454,21 @@
                 
                 // KOORDINAT ABSOLUT MUTLAK:
                 // FOTO DITURUNKAN KE 110px AGAR BAJUNYA MENYELIP (TUCK-IN) DI BAWAH KOTAK MERAH (125px).
-                // NAMA & NISN DIBERI PADDING-BOTTOM AGAR PAS TENGAH.
+                // HASIL: 1000% TANPA JEDA (GAP)!
                 front.innerHTML = `
                     <!-- Foto Siswa (Koordinat Absolut) - Diselipkan di bawah Kotak Merah -->
                     <div style="position: absolute; right: 3%; bottom: 110px; width: 62%; height: 500px; display: flex; justify-content: center; align-items: flex-end; z-index: 5;">
                         ${photoSrc ? `<img src="${photoSrc}" crossorigin="anonymous" onerror="this.onerror=null; this.src='https://placehold.co/300x400/f8fafc/9ca3af?text=FOTO+ERROR';" style="width: 95%; max-height: 500px; object-fit: contain; object-position: bottom; filter: drop-shadow(0 8px 12px rgba(0,0,0,0.4)); background: transparent;">` : `<div style="width: 95%; height: 100%; background: #e2e8f0; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-weight: bold; font-size: 24px; border: 4px dashed #cbd5e1; border-radius: 10px;">Belum Ada Foto</div>`}
                     </div>
                     
-                    <!-- Kotak Merah (Nama) - Dipaku Mati Tengah dengan Padding -->
+                    <!-- Kotak Merah (Nama) - Dipaku Mati Tengah -->
                     <div style="position: absolute; right: 3%; bottom: 65px; width: 62%; height: 60px; background-color: #b91c1c; color: white; display: table; text-align: center; box-shadow: 0 -4px 10px rgba(0,0,0,0.25); z-index: 20; border-radius: 4px 4px 0 0;">
-                        <span style="display: table-cell; vertical-align: middle; padding-bottom: 4px; font-size: 21px; font-weight: 900; text-transform: uppercase; line-height: 1;">${student.name}</span>
+                        <span style="display: table-cell; vertical-align: middle; font-size: 21px; font-weight: 900; text-transform: uppercase; line-height: 1;">${student.name}</span>
                     </div>
                     
-                    <!-- Kotak Putih (NISN) - Dipaku Mati Tengah dengan Padding -->
+                    <!-- Kotak Putih (NISN) - Dipaku Mati Tengah -->
                     <div style="position: absolute; right: 3%; bottom: 25px; width: 62%; height: 40px; background: rgba(255,255,255,0.95); color: #111827; display: table; text-align: center; border-radius: 0 0 4px 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); z-index: 20; letter-spacing: 0.5px;">
-                        <span style="display: table-cell; vertical-align: middle; padding-bottom: 2px; font-size: 18px; font-weight: 900; line-height: 1;">NISN: ${student.nis}</span>
+                        <span style="display: table-cell; vertical-align: middle; font-size: 18px; font-weight: 900; line-height: 1;">NISN: ${student.nis}</span>
                     </div>`;
 
                 let back = document.createElement('div'); 
@@ -488,13 +487,13 @@
                 let qrEl = back.querySelector(`#qr_canvas_${student.id}`);
                 if(qrEl) new QRCode(qrEl, { text: student.id, width: 350, height: 350, colorDark : "#7f1d1d", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
 
-                // RESOLUSI ULTRA HD (Scale 3) DENGAN FORMAT PNG LOSSLESS UNTUK KETAJAMAN MAKSIMAL
+                // RESOLUSI KILAT & TAJAM (Scale 2.5) + Anti Taint (useCORS: true)
                 setTimeout(async () => {
-                    const opt = { scale: 3, useCORS: true, allowTaint: false, backgroundColor: null, logging: false }; 
+                    const opt = { scale: 2.5, useCORS: true, allowTaint: false, backgroundColor: null, logging: false }; 
                     const canvasFront = await html2canvas(front, opt);
                     const canvasBack = await html2canvas(back, opt);
                     container.innerHTML = ''; 
-                    resolve({ front: canvasFront.toDataURL('image/png'), back: canvasBack.toDataURL('image/png') });
+                    resolve({ front: canvasFront.toDataURL('image/jpeg', 0.95), back: canvasBack.toDataURL('image/jpeg', 0.95) });
                 }, 300); 
             });
         };
@@ -502,18 +501,18 @@
         window.downloadSinglePNG = async (id) => {
             const student = appState.students.find(s => s.id === id);
             if(!student) return;
-            UI.toast("Menyiapkan ID Card Ultra HD... Mohon tunggu sebentar.", "success");
+            UI.toast("Menyiapkan ID Card... Mohon tunggu sebentar.", "success");
             
             const images = await generateCardCanvas(student);
             
             let linkF = document.createElement('a');
-            linkF.download = `IDCard_${student.name.replace(/[^a-zA-Z0-9]/g, '_')}_Depan.png`;
+            linkF.download = `IDCard_${student.name.replace(/[^a-zA-Z0-9]/g, '_')}_Depan.jpg`;
             linkF.href = images.front;
             linkF.click();
 
             setTimeout(() => {
                 let linkB = document.createElement('a');
-                linkB.download = `IDCard_${student.name.replace(/[^a-zA-Z0-9]/g, '_')}_Belakang.png`;
+                linkB.download = `IDCard_${student.name.replace(/[^a-zA-Z0-9]/g, '_')}_Belakang.jpg`;
                 linkB.href = images.back;
                 linkB.click();
             }, 500);
@@ -535,11 +534,11 @@
                 
                 for(let i=0; i<stds.length; i++) {
                     let s = stds[i];
-                    if(loaderP) loaderP.innerText = `MEMOTRET KARTU ULTRA HD ${i+1}/${stds.length}...`;
+                    if(loaderP) loaderP.innerText = `MEMOTRET KARTU ${i+1}/${stds.length}...`;
                     const images = await generateCardCanvas(s);
                     let safeName = s.name.replace(/[^a-zA-Z0-9]/g, '_');
-                    folder.file(`${safeName}_Depan.png`, images.front.split(',')[1], {base64: true});
-                    folder.file(`${safeName}_Belakang.png`, images.back.split(',')[1], {base64: true});
+                    folder.file(`${safeName}_Depan.jpg`, images.front.split(',')[1], {base64: true});
+                    folder.file(`${safeName}_Belakang.jpg`, images.back.split(',')[1], {base64: true});
                 }
                 
                 if(loaderP) loaderP.innerText = `MEMBUNGKUS FILE ZIP (MOHON TUNGGU)...`;
@@ -586,16 +585,16 @@
                 if (bgFront) front.style.backgroundImage = `url("${bgFront}")`;
                 
                 // KOORDINAT ABSOLUT UNTUK KERTAS CETAK (DIKUNCI MATI)
-                // DENGAN PADDING-BOTTOM AGAR TULISAN PAS TENGAH
+                // FOTO DITURUNKAN KE 1.0cm AGAR BAJUNYA MENYELIP DI BAWAH KOTAK MERAH (1.15cm)
                 front.innerHTML = `
                     <div style="position: absolute; right: 3%; bottom: 1.0cm; width: 62%; height: 4.6cm; display: flex; justify-content: center; align-items: flex-end; z-index: 5;">
                         ${photoSrc ? `<img src="${photoSrc}" crossorigin="anonymous" onerror="this.onerror=null; this.src='https://placehold.co/300x400/f8fafc/9ca3af?text=FOTO+ERROR';" style="width: 95%; max-height: 100%; object-fit: contain; object-position: bottom; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3)); background: transparent;">` : `<div style="width: 95%; height: 100%; background: #e2e8f0; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-weight: bold; font-size: 12px; border: 2px dashed #cbd5e1; border-radius: 4px;">Belum Ada Foto</div>`}
                     </div>
                     <div style="position: absolute; right: 3%; bottom: 0.6cm; width: 62%; height: 0.55cm; background-color: #991b1b; color: white; display: table; text-align: center; border-radius: 2px 2px 0 0; z-index: 20;">
-                        <span style="display: table-cell; vertical-align: middle; padding-bottom: 3px; font-size: 7px; font-weight: 900; text-transform: uppercase; line-height: 1;">${s.name}</span>
+                        <span style="display: table-cell; vertical-align: middle; padding-bottom: 2px; font-size: 7px; font-weight: 900; text-transform: uppercase; line-height: 1;">${s.name}</span>
                     </div>
                     <div style="position: absolute; right: 3%; bottom: 0.25cm; width: 62%; height: 0.35cm; background: rgba(255,255,255,0.95); color: #111827; display: table; text-align: center; border-radius: 0 0 2px 2px; z-index: 20;">
-                        <span style="display: table-cell; vertical-align: middle; padding-bottom: 2px; font-size: 7px; font-weight: 900; line-height: 1;">NISN: ${s.nis}</span>
+                        <span style="display: table-cell; vertical-align: middle; padding-bottom: 1.5px; font-size: 7px; font-weight: 900; line-height: 1;">NISN: ${s.nis}</span>
                     </div>`;
 
                 let back = document.createElement('div'); back.style.cssText = cardStyle;
@@ -1135,7 +1134,7 @@
         };
 
         // ==========================================
-        // FITUR TABEL DENGAN ANTI-BLOKIR CHROME MURNI
+        // FITUR TABEL DENGAN ANTI-BLOKIR CHROME & FALLBACK
         // ==========================================
         window.loadStudentTable = () => {
             const cls = UI.val('siswa-class-filter'); const search = UI.val('siswa-search')?.toLowerCase() || ''; let filtered = appState.students;
@@ -1149,8 +1148,15 @@
                 filtered.forEach((s, i) => {
                     let rawUrl = s.photoUrl || '';
                     
+                    // Jembatan Penyelamat (Proxy) untuk melewati blokir Chrome di tabel
+                    let safeUrl = rawUrl;
+                    if (rawUrl.startsWith('http')) {
+                        let clean = rawUrl.replace(/^https?:\/\//, '');
+                        safeUrl = `https://wsrv.nl/?url=${clean}&output=png`;
+                    }
+                    
                     let photoHtml = rawUrl 
-                        ? `<img src="${rawUrl}" referrerpolicy="no-referrer" onerror="this.onerror=null; this.src='https://placehold.co/40x56/f8fafc/9ca3af?text=Foto';" style="width: 40px; height: 56px; object-fit: cover; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); cursor: pointer; background: transparent;" onclick="triggerPhotoUpload('${s.id}')" title="Ubah Foto">` 
+                        ? `<img src="${safeUrl}" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="window.handleImageError(this, '${rawUrl}')" style="width: 40px; height: 56px; object-fit: cover; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); cursor: pointer; background: transparent;" onclick="triggerPhotoUpload('${s.id}')" title="Ubah Foto">` 
                         : `<div onclick="triggerPhotoUpload('${s.id}')" style="width: 40px; height: 56px; background: #e2e8f0; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #94a3b8; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Unggah Foto"><span class="text-[10px] font-bold">Foto</span></div>`;
                     
                     tbody += `<tr class="hover:bg-slate-50 bg-white border-b">
@@ -1159,11 +1165,21 @@
                         <td class="p-3 font-semibold">${s.name}<br><span class="text-xs text-gray-500 font-mono">NISN: ${s.nis}</span></td>
                         <td class="p-3 text-center font-bold text-emerald-700 bg-emerald-50">${s.class}</td>
                         <td class="p-3"><div class="flex items-center gap-2"><i class="fab fa-whatsapp text-green-500 text-lg"></i><input type="number" id="phone_${s.id}" class="border rounded p-2 text-sm w-full md:w-48 outline-none focus:border-emerald-500 font-mono" value="${s.parentPhone || ''}" placeholder="Cth: 0812345..."><button onclick="savePhone('${s.id}')" class="bg-slate-200 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 px-3 py-2 rounded font-bold transition shadow-sm"><i class="fas fa-save"></i></button></div></td>
-                        <td class="p-3 text-center"><div class="flex flex-col gap-1 items-center"><button onclick="generateSingleQR('${s.id}')" class="bg-slate-800 hover:bg-slate-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-print mr-1"></i> Cetak</button><button onclick="downloadSinglePNG('${s.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-image mr-1"></i> PNG HD</button></div></td>
+                        <td class="p-3 text-center"><div class="flex flex-col gap-1 items-center"><button onclick="generateSingleQR('${s.id}')" class="bg-slate-800 hover:bg-slate-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-print mr-1"></i> Cetak</button><button onclick="downloadSinglePNG('${s.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-image mr-1"></i> PNG</button></div></td>
                     </tr>`;
                 });
             }
             UI.html('siswa-tbody', tbody);
+        };
+
+        // Jembatan Penyelamat Ke-2 Jika CDN Gagal
+        window.handleImageError = (imgElement, originalUrl) => {
+            if (!imgElement.dataset.retried) {
+                imgElement.dataset.retried = 'true';
+                imgElement.src = `https://api.allorigins.win/raw?url=${encodeURIComponent(originalUrl)}`;
+            } else {
+                imgElement.outerHTML = `<div style="width: 40px; height: 56px; background: #fee2e2; border: 1px solid #f87171; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #ef4444;" title="Foto Diblokir Server"><i class="fas fa-image-slash"></i></div>`;
+            }
         };
 
         window.savePhone = (id) => { const phone = UI.val(`phone_${id}`); const idx = appState.students.findIndex(s => s.id === id); if(idx !== -1) { appState.students[idx].parentPhone = phone; saveDataToCloud('students'); UI.toast("Nomor WA Disimpan!"); } };
