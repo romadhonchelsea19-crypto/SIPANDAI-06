@@ -332,7 +332,7 @@
         }
 
         // ==========================================
-        // KOMPRESOR LOKAL & PENGUNGGAH
+        // KOMPRESOR & PENGUNGGAH IMGBB / LOKAL
         // ==========================================
         window.handleImageUpload = async (event, type) => {
             const file = event.target.files[0];
@@ -354,34 +354,65 @@
                     if (response.ok) { finalImageBlob = await response.blob(); } else { console.warn("Remove.bg gagal/limit. Memakai foto asli."); }
                 }
 
-                // 2. Resize Local Canvas (DIUBAH KE PNG BENING AGAR TAMPIL CANTIK)
-                if (loader) loader.querySelector('p').innerText = "MENGECILKAN UKURAN GAMBAR...";
-                const resizedBase64 = await resizeImageLocally(finalImageBlob, type);
+                // 2. Upload ImgBB atau Kompres Lokal
+                const imgbbKey = appState.settings.imgbbApiKey || '';
+                let finalImageUrl = "";
 
-                // 3. Simpan Instan ke Cloud (Bypass ImgBB untuk kecepatan & keamanan Database)
+                if (imgbbKey) {
+                    if (loader) loader.querySelector('p').innerText = "☁️ MENGUNGGAH KE IMGBB (ANTI PENUH)...";
+                    const formData = new FormData();
+                    formData.append('image', finalImageBlob);
+                    const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (data.success) {
+                        finalImageUrl = data.data.url;
+                    } else {
+                        throw new Error("Gagal ImgBB");
+                    }
+                } else {
+                    if (loader) loader.querySelector('p').innerText = "MENGECILKAN UKURAN GAMBAR...";
+                    finalImageUrl = await resizeImageLocally(finalImageBlob, type);
+                }
+
+                // 3. Simpan ke Cloud Database
                 if (loader) loader.querySelector('p').innerText = "☁️ MENYIMPAN KE BRANKAS KITA...";
                 
                 if (type === 'cardBgFront' || type === 'cardBgBack') {
                     const assetRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_assets', 'backgrounds');
-                    await setDoc(assetRef, { [type]: resizedBase64 }, { merge: true });
-                    appState.settings[type] = resizedBase64; renderPengaturan(); UI.toast("Desain ID Card disimpan!", "success");
+                    await setDoc(assetRef, { [type]: finalImageUrl }, { merge: true });
+                    appState.settings[type] = finalImageUrl; renderPengaturan(); UI.toast("Desain ID Card disimpan!", "success");
                 } else if (type === 'student') {
                     const idx = appState.students.findIndex(s => s.id === window.currentUploadStudentId);
                     if (idx !== -1) {
-                        appState.students[idx].photoUrl = resizedBase64;
+                        appState.students[idx].photoUrl = finalImageUrl;
                         await saveDataToCloud('students'); 
                         loadStudentTable(); 
                         UI.toast("Foto siswa BERHASIL DISIMPAN & MUNCUL!", "success");
                     }
                 } else {
-                    appState.settings[type] = resizedBase64;
+                    appState.settings[type] = finalImageUrl;
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
-                    await setDoc(docRef, { settings: { [type]: resizedBase64 } }, { merge: true });
+                    await setDoc(docRef, { settings: { [type]: finalImageUrl } }, { merge: true });
                     renderPengaturan(); UI.toast("Logo berhasil disimpan!", "success");
                 }
 
             } catch (error) {
-                console.error(error); UI.toast("Terjadi kesalahan sistem saat menyimpan.", "error");
+                console.error(error); 
+                // Fallback jika ImgBB error tapi API key ada
+                try {
+                    let fallbackUrl = await resizeImageLocally(finalImageBlob, type);
+                    if (type === 'student') {
+                        const idx = appState.students.findIndex(s => s.id === window.currentUploadStudentId);
+                        if (idx !== -1) {
+                            appState.students[idx].photoUrl = fallbackUrl;
+                            await saveDataToCloud('students'); 
+                            loadStudentTable(); 
+                            UI.toast("Disimpan darurat ke memori lokal!", "warning");
+                        }
+                    }
+                } catch(e) {
+                    UI.toast("Terjadi kesalahan sistem saat menyimpan.", "error");
+                }
             } finally {
                 if (loader) { loader.classList.add('hidden'); loader.querySelector('p').innerText = "MEMUAT DARI CLOUD..."; }
                 event.target.value = ''; 
