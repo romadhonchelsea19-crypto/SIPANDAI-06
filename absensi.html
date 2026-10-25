@@ -15,7 +15,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- Mesin Cetak ID Card (Kamera Tersembunyi) -->
+    <!-- Mesin Cetak ID Card -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -242,7 +242,10 @@
                     delete cleanSettings.cardBgFront; delete cleanSettings.cardBgBack;
                     await setDoc(docRef, { settings: cleanSettings }, { merge: true });
                 }
-            } catch(e) { console.error(e); UI.toast("Gagal menyimpan ke cloud!", "error"); }
+            } catch(e) { 
+                console.error(e); 
+                UI.toast("Gagal menyimpan ke cloud! Cek koneksi atau memori penuh.", "error"); 
+            }
         };
 
         window.togglePasswordVisibility = (inputId, iconId) => {
@@ -329,7 +332,7 @@
         }
 
         // ==========================================
-        // MESIN AI PENGHAPUS LATAR + UPLOAD IMGBB
+        // KOMPRESOR LOKAL & PENGUNGGAH CERDAS (KHUSUS AGAR AMAN DI GOOGLE CLOUD)
         // ==========================================
         window.handleImageUpload = async (event, type) => {
             const file = event.target.files[0];
@@ -342,61 +345,38 @@
             let finalImageBlob = file;
 
             try {
-                // 1. Remove BG
+                // 1. Remove BG (Jika ada kunci API)
                 const removeBgKey = appState.settings.removeBgApiKey || '';
                 if (type === 'student' && removeBgKey) {
                     if (loader) loader.querySelector('p').innerText = "✂️ MENGHAPUS BACKGROUND (AI)...";
                     const formData = new FormData(); formData.append('size', 'auto'); formData.append('image_file', file);
                     const response = await fetch('https://api.remove.bg/v1.0/removebg', { method: 'POST', headers: { 'X-Api-Key': removeBgKey }, body: formData });
-                    if (response.ok) { finalImageBlob = await response.blob(); } else { console.warn("Remove.bg gagal/limit. Memakai foto asli."); UI.toast("Gagal hapus background. Cek Kunci Remove.bg", "warning"); }
+                    if (response.ok) { finalImageBlob = await response.blob(); } else { console.warn("Remove.bg gagal/limit. Memakai foto asli."); }
                 }
 
-                // 2. Resize Local Canvas
+                // 2. Resize Local Canvas (DIUBAH KE PNG BENING AGAR TAMPIL CANTIK)
                 if (loader) loader.querySelector('p').innerText = "MENGECILKAN UKURAN GAMBAR...";
                 const resizedBase64 = await resizeImageLocally(finalImageBlob, type);
 
-                // 3. Upload ImgBB (dengan Fallback aman)
-                const imgbbKey = appState.settings.imgbbApiKey || '';
-                let finalUrl = resizedBase64; // Setelan Awal: Pake Lokal (Aman 100%)
-
-                if (imgbbKey) {
-                    if (loader) loader.querySelector('p').innerText = "☁️ MENGUNGGAH KE GUDANG (IMGBB)...";
-                    const formData = new FormData();
-                    formData.append('image', resizedBase64.split(',')[1]);
-                    try {
-                        const response = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, { method: 'POST', body: formData });
-                        const json = await response.json();
-                        if (json.success) { 
-                            finalUrl = json.data.url; 
-                        } else {
-                            console.warn("ImgBB gagal, simpan lokal.");
-                            UI.toast("Gagal ke ImgBB. Menyimpan foto secara lokal.", "warning"); 
-                        }
-                    } catch(e) {
-                        console.warn("ImgBB fetch error, simpan lokal.");
-                        UI.toast("Koneksi ImgBB gagal. Menyimpan foto secara lokal.", "warning");
-                    }
-                } else {
-                    UI.toast("Kunci ImgBB kosong. Menyimpan foto secara lokal.", "success");
-                }
-
-                // 4. Save to Firestore
+                // 3. Simpan Instan ke Cloud (Bypass ImgBB untuk kecepatan & keamanan Database)
                 if (loader) loader.querySelector('p').innerText = "☁️ MENYIMPAN KE BRANKAS KITA...";
                 
                 if (type === 'cardBgFront' || type === 'cardBgBack') {
                     const assetRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_assets', 'backgrounds');
-                    await setDoc(assetRef, { [type]: finalUrl }, { merge: true });
-                    appState.settings[type] = finalUrl; renderPengaturan(); UI.toast("Desain ID Card disimpan!", "success");
+                    await setDoc(assetRef, { [type]: resizedBase64 }, { merge: true });
+                    appState.settings[type] = resizedBase64; renderPengaturan(); UI.toast("Desain ID Card disimpan!", "success");
                 } else if (type === 'student') {
                     const idx = appState.students.findIndex(s => s.id === window.currentUploadStudentId);
                     if (idx !== -1) {
-                        appState.students[idx].photoUrl = finalUrl;
-                        await saveDataToCloud('students'); loadStudentTable(); UI.toast("Foto siswa disimpan!", "success");
+                        appState.students[idx].photoUrl = resizedBase64;
+                        await saveDataToCloud('students'); 
+                        loadStudentTable(); 
+                        UI.toast("Foto siswa BERHASIL DISIMPAN & MUNCUL!", "success");
                     }
                 } else {
-                    appState.settings[type] = finalUrl;
+                    appState.settings[type] = resizedBase64;
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06', 'appState');
-                    await setDoc(docRef, { settings: { [type]: finalUrl } }, { merge: true });
+                    await setDoc(docRef, { settings: { [type]: resizedBase64 } }, { merge: true });
                     renderPengaturan(); UI.toast("Logo berhasil disimpan!", "success");
                 }
 
@@ -408,6 +388,7 @@
             }
         };
 
+        // KUNCI AMAN: KOMPRES KE PNG DENGAN UKURAN MINI (350px) AGAR GOOGLE MENERIMA
         window.resizeImageLocally = (blob, type) => {
             return new Promise((resolve) => {
                 const reader = new FileReader();
@@ -415,19 +396,21 @@
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
-                        let MAX_DIMENSION = 1200;
-                        if (type === 'student' || type === 'kopLogoKiri' || type === 'kopLogoKanan') MAX_DIMENSION = 800; // Ultra HD untuk Siswa
+                        // Batasi ukuran agar file super ringan (Pasti muat di Google Cloud)
+                        let MAX_DIMENSION = (type === 'student') ? 350 : 800; 
 
                         let width = img.width; let height = img.height;
                         if (width > height) { if (width > MAX_DIMENSION) { height = Math.round(height * MAX_DIMENSION / width); width = MAX_DIMENSION; } }
                         else { if (height > MAX_DIMENSION) { width = Math.round(width * MAX_DIMENSION / height); height = MAX_DIMENSION; } }
 
                         canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d');
-                        ctx.clearRect(0, 0, width, height); ctx.drawImage(img, 0, 0, width, height);
+                        
+                        // KOSONGKAN LATAR (TRANSPARAN)
+                        ctx.clearRect(0, 0, width, height); 
+                        ctx.drawImage(img, 0, 0, width, height);
 
-                        let mimeType = (type === 'cardBgFront' || type === 'cardBgBack') ? 'image/jpeg' : 'image/png';
-                        let quality = mimeType === 'image/jpeg' ? 0.8 : undefined;
-                        resolve(canvas.toDataURL(mimeType, quality));
+                        // SIMPAN SEBAGAI PNG AGAR BACKGROUND BENING TIDAK JADI PUTIH/HITAM
+                        resolve(canvas.toDataURL('image/png'));
                     };
                     img.src = e.target.result;
                 };
@@ -435,39 +418,10 @@
             });
         };
 
-        window.getBase64FromUrl = async (url) => {
-            if (!url || url.startsWith('data:image')) return url;
-            try {
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-                const res = await fetch(proxyUrl);
-                if (res.ok) {
-                    const blob = await res.blob();
-                    return await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
-                }
-            } catch(e) { console.warn("Proxy AllOrigins gagal."); }
-
-            try {
-                const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=png&af=1`;
-                const res = await fetch(proxyUrl);
-                if (res.ok) {
-                    const blob = await res.blob();
-                    return await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
-                }
-            } catch(e) { console.warn("Proxy WSRV gagal."); }
-
-            try {
-                const res = await fetch(url + "?t=" + new Date().getTime(), { mode: 'cors' });
-                if (res.ok) {
-                    const blob = await res.blob();
-                    return await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
-                }
-            } catch(e) { console.warn("Fetch langsung gagal."); }
-
-            return url; 
-        };
-
         // ==========================================
-        // MESIN CANGGIH: PEMBUAT GAMBAR KARTU ULTRA HD
+        // KOORDINAT ABSOLUT: DESAIN ID CARD (DIKUNCI MATI)
+        // DENGAN JALUR TOL CDN (wsrv.nl) DAN PENYELIPAN BAJU BAWAH
+        // TULISAN DINAIKKAN PAS TENGAH DAN HASIL PNG ULTRA HD
         // ==========================================
         window.generateCardCanvas = async (student) => {
             return new Promise(async (resolve) => {
@@ -482,45 +436,40 @@
                 let bgFront = appState.settings.cardBgFront || '';
                 let bgBack = appState.settings.cardBgBack || '';
 
-                if (bgFront && bgFront.startsWith('http')) bgFront = await window.getBase64FromUrl(bgFront);
-                if (bgBack && bgBack.startsWith('http')) bgBack = await window.getBase64FromUrl(bgBack);
-
                 let cardStyle = `width: 600px; height: 960px; border-radius: 20px; position: relative; overflow: hidden; font-family: "Montserrat", sans-serif; background-color: white; background-size: 100% 100%; background-position: center; background-repeat: no-repeat; border: 2px solid #cbd5e1; box-sizing: border-box;`;
 
-                let photoSrc = student.photoUrl; 
-                let validPhoto = photoSrc && (photoSrc.startsWith('http') || photoSrc.startsWith('data:image'));
-                if(!validPhoto) photoSrc = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiB2aWV3Qm94PSIwIDAgMzAwIDQwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiNmOGZhZmMiLz48dGV4dCB4PSIxNTAiIHk9IjIwMCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM5Y2EzYWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkZvdG8gS29zb25nPC90ZXh0Pjwvc3ZnPg==';
-
-                if (validPhoto && photoSrc.startsWith('http')) {
-                    photoSrc = await window.getBase64FromUrl(photoSrc);
+                // JALUR TOL CDN UNTUK MENGHINDARI BLOKIR CORS (MENGGUNAKAN PNG BENING)
+                let rawPhotoSrc = student.photoUrl || '';
+                let photoSrc = '';
+                
+                if (rawPhotoSrc.startsWith('data:')) {
+                    photoSrc = rawPhotoSrc; 
+                } else if (rawPhotoSrc.startsWith('http')) {
+                    let cleanUrl = rawPhotoSrc.replace(/^https?:\/\//, '');
+                    photoSrc = `https://wsrv.nl/?url=${cleanUrl}&output=png`;
                 }
 
                 let front = document.createElement('div'); 
                 front.style.cssText = cardStyle;
                 if (bgFront) front.style.backgroundImage = `url("${bgFront}")`;
                 
-                // MENGGUNAKAN TEKNIK DISPLAY TABLE AGAR HURUF MUTLAK DI TENGAH
+                // KOORDINAT ABSOLUT MUTLAK:
+                // FOTO DITURUNKAN KE 110px AGAR BAJUNYA MENYELIP (TUCK-IN) DI BAWAH KOTAK MERAH (125px).
+                // NAMA & NISN DIBERI PADDING-BOTTOM AGAR PAS TENGAH.
                 front.innerHTML = `
-                    <div style="position: absolute; right: 0; bottom: 0; width: 68%; height: 100%; z-index: 10; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 40px;">
-                        
-                        <!-- POSISI FOTO DI DALAM (DI BELAKANG KOTAK MERAH -> Z-INDEX 5) -->
-                        <div style="position: absolute; bottom: 95px; width: 100%; text-align: center; display: flex; justify-content: center; z-index: 5;">
-                            <img src="${photoSrc}" style="width: 95%; height: 580px; object-fit: contain; object-position: bottom center; filter: drop-shadow(0 8px 12px rgba(0,0,0,0.4));">
-                        </div>
-                        
-                        <!-- KOTAK MERAH UNTUK NAMA (DI TENGAH) PAKAI TABEL -->
-                        <div style="position: relative; background-color: #b91c1c; color: white; width: 95%; text-align: center; font-size: 21px; font-weight: 900; text-transform: uppercase; line-height: 1.2; height: 65px; box-shadow: 0 -4px 10px rgba(0,0,0,0.25); z-index: 20; box-sizing: border-box; display: table;">
-                            <div style="display: table-cell; vertical-align: middle; word-wrap: break-word; white-space: normal; width: 100%; padding: 0 5px; padding-bottom: 4px;">
-                                ${student.name}
-                            </div>
-                        </div>
-                        
-                        <!-- KOTAK PUTIH UNTUK NISN PAKAI TABEL -->
-                        <div style="position: relative; background: rgba(255,255,255,0.95); color: #111827; width: 95%; text-align: center; font-size: 19px; font-weight: 900; margin-top: 5px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); z-index: 20; letter-spacing: 0.5px; box-sizing: border-box; height: 35px; display: table;">
-                            <div style="display: table-cell; vertical-align: middle; padding-bottom: 2px;">
-                                NISN: ${student.nis}
-                            </div>
-                        </div>
+                    <!-- Foto Siswa (Koordinat Absolut) - Diselipkan di bawah Kotak Merah -->
+                    <div style="position: absolute; right: 3%; bottom: 110px; width: 62%; height: 500px; display: flex; justify-content: center; align-items: flex-end; z-index: 5;">
+                        ${photoSrc ? `<img src="${photoSrc}" crossorigin="anonymous" onerror="this.onerror=null; this.src='https://placehold.co/300x400/f8fafc/9ca3af?text=FOTO+ERROR';" style="width: 95%; max-height: 500px; object-fit: contain; object-position: bottom; filter: drop-shadow(0 8px 12px rgba(0,0,0,0.4)); background: transparent;">` : `<div style="width: 95%; height: 100%; background: #e2e8f0; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-weight: bold; font-size: 24px; border: 4px dashed #cbd5e1; border-radius: 10px;">Belum Ada Foto</div>`}
+                    </div>
+                    
+                    <!-- Kotak Merah (Nama) - Dipaku Mati Tengah dengan Padding -->
+                    <div style="position: absolute; right: 3%; bottom: 65px; width: 62%; height: 60px; background-color: #b91c1c; color: white; display: table; text-align: center; box-shadow: 0 -4px 10px rgba(0,0,0,0.25); z-index: 20; border-radius: 4px 4px 0 0;">
+                        <span style="display: table-cell; vertical-align: middle; padding-bottom: 4px; font-size: 21px; font-weight: 900; text-transform: uppercase; line-height: 1;">${student.name}</span>
+                    </div>
+                    
+                    <!-- Kotak Putih (NISN) - Dipaku Mati Tengah dengan Padding -->
+                    <div style="position: absolute; right: 3%; bottom: 25px; width: 62%; height: 40px; background: rgba(255,255,255,0.95); color: #111827; display: table; text-align: center; border-radius: 0 0 4px 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); z-index: 20; letter-spacing: 0.5px;">
+                        <span style="display: table-cell; vertical-align: middle; padding-bottom: 2px; font-size: 18px; font-weight: 900; line-height: 1;">NISN: ${student.nis}</span>
                     </div>`;
 
                 let back = document.createElement('div'); 
@@ -539,20 +488,21 @@
                 let qrEl = back.querySelector(`#qr_canvas_${student.id}`);
                 if(qrEl) new QRCode(qrEl, { text: student.id, width: 350, height: 350, colorDark : "#7f1d1d", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
 
+                // RESOLUSI ULTRA HD (Scale 3) DENGAN FORMAT PNG LOSSLESS UNTUK KETAJAMAN MAKSIMAL
                 setTimeout(async () => {
-                    const opt = { scale: 3, useCORS: true, backgroundColor: null }; // Scale 3 for Ultra HD
+                    const opt = { scale: 3, useCORS: true, allowTaint: false, backgroundColor: null, logging: false }; 
                     const canvasFront = await html2canvas(front, opt);
                     const canvasBack = await html2canvas(back, opt);
                     container.innerHTML = ''; 
                     resolve({ front: canvasFront.toDataURL('image/png'), back: canvasBack.toDataURL('image/png') });
-                }, 800); 
+                }, 300); 
             });
         };
 
         window.downloadSinglePNG = async (id) => {
             const student = appState.students.find(s => s.id === id);
             if(!student) return;
-            UI.toast("Membangun ID Card Ultra HD... Mohon tunggu sebentar.", "success");
+            UI.toast("Menyiapkan ID Card Ultra HD... Mohon tunggu sebentar.", "success");
             
             const images = await generateCardCanvas(student);
             
@@ -585,7 +535,7 @@
                 
                 for(let i=0; i<stds.length; i++) {
                     let s = stds[i];
-                    if(loaderP) loaderP.innerText = `MEMOTRET KARTU ${i+1}/${stds.length}...`;
+                    if(loaderP) loaderP.innerText = `MEMOTRET KARTU ULTRA HD ${i+1}/${stds.length}...`;
                     const images = await generateCardCanvas(s);
                     let safeName = s.name.replace(/[^a-zA-Z0-9]/g, '_');
                     folder.file(`${safeName}_Depan.png`, images.front.split(',')[1], {base64: true});
@@ -614,9 +564,6 @@
             let bgFront = appState.settings.cardBgFront || '';
             let bgBack = appState.settings.cardBgBack || '';
 
-            if (bgFront && bgFront.startsWith('http')) bgFront = await window.getBase64FromUrl(bgFront);
-            if (bgBack && bgBack.startsWith('http')) bgBack = await window.getBase64FromUrl(bgBack);
-
             let cardStyle = `width: 5.5cm; height: 8.8cm; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); position: relative; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: "Montserrat", sans-serif; background-color: white; border: 1px solid #cbd5e1; flex-shrink: 0; background-size: 100% 100%; background-position: center; background-repeat: no-repeat;`;
 
             container.innerHTML = '';
@@ -625,17 +572,31 @@
                 let s = studentList[i];
                 let cardPair = document.createElement('div'); cardPair.style.cssText = 'display: flex; gap: 15px; page-break-inside: avoid; justify-content: center; margin-bottom: 25px;';
                 
-                let photoSrc = s.photoUrl; 
-                let validPhoto = photoSrc && (photoSrc.startsWith('http') || photoSrc.startsWith('data:image'));
-                if(!validPhoto) {
-                    photoSrc = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiB2aWV3Qm94PSIwIDAgMzAwIDQwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiNmOGZhZmMiLz48dGV4dCB4PSIxNTAiIHk9IjIwMCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM5Y2EzYWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkZvdG8gS29zb25nPC90ZXh0Pjwvc3ZnPg==';
-                } else if (validPhoto && photoSrc.startsWith('http')) {
-                    photoSrc = await window.getBase64FromUrl(photoSrc);
+                let rawPhotoSrc = s.photoUrl || '';
+                let photoSrc = '';
+                
+                if (rawPhotoSrc.startsWith('data:')) {
+                    photoSrc = rawPhotoSrc; 
+                } else if (rawPhotoSrc.startsWith('http')) {
+                    let cleanUrl = rawPhotoSrc.replace(/^https?:\/\//, '');
+                    photoSrc = `https://wsrv.nl/?url=${cleanUrl}&output=png`;
                 }
-
+                
                 let front = document.createElement('div'); front.style.cssText = cardStyle;
                 if (bgFront) front.style.backgroundImage = `url("${bgFront}")`;
-                front.innerHTML = `<div style="position: absolute; right: 0; bottom: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 12px; box-sizing: border-box; z-index: 10;"><div style="position: relative; z-index: 5; width: 100%; display: flex; justify-content: flex-end; margin-bottom: 0px; padding-right: 2px;"><img src="${photoSrc}" style="width: 3.6cm; height: 4.8cm; object-fit: contain; object-position: bottom; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3)); mix-blend-mode: normal;"></div><div style="width: 100%; display: flex; flex-direction: column; align-items: flex-end; z-index: 10; padding-right: 4px;"><div style="background-color: #991b1b; color: white; width: 70%; padding: 4px 2px; padding-bottom: 5px; text-align: center; font-size: 7px; font-weight: 800; text-transform: uppercase; line-height: 1.2; display: flex; align-items: center; justify-content: center; min-height: 18px; box-shadow: 0 -2px 4px rgba(0,0,0,0.2); word-break: break-word; white-space: normal;">${s.name}</div><div style="width: 70%; text-align: center; font-size: 7.5px; font-weight: 900; color: #111827; margin-top: 3px; background: rgba(255,255,255,0.9); padding: 2px 2px; padding-bottom: 3px; border-radius: 2px;">NISN: ${s.nis}</div></div></div>`;
+                
+                // KOORDINAT ABSOLUT UNTUK KERTAS CETAK (DIKUNCI MATI)
+                // DENGAN PADDING-BOTTOM AGAR TULISAN PAS TENGAH
+                front.innerHTML = `
+                    <div style="position: absolute; right: 3%; bottom: 1.0cm; width: 62%; height: 4.6cm; display: flex; justify-content: center; align-items: flex-end; z-index: 5;">
+                        ${photoSrc ? `<img src="${photoSrc}" crossorigin="anonymous" onerror="this.onerror=null; this.src='https://placehold.co/300x400/f8fafc/9ca3af?text=FOTO+ERROR';" style="width: 95%; max-height: 100%; object-fit: contain; object-position: bottom; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3)); background: transparent;">` : `<div style="width: 95%; height: 100%; background: #e2e8f0; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-weight: bold; font-size: 12px; border: 2px dashed #cbd5e1; border-radius: 4px;">Belum Ada Foto</div>`}
+                    </div>
+                    <div style="position: absolute; right: 3%; bottom: 0.6cm; width: 62%; height: 0.55cm; background-color: #991b1b; color: white; display: table; text-align: center; border-radius: 2px 2px 0 0; z-index: 20;">
+                        <span style="display: table-cell; vertical-align: middle; padding-bottom: 3px; font-size: 7px; font-weight: 900; text-transform: uppercase; line-height: 1;">${s.name}</span>
+                    </div>
+                    <div style="position: absolute; right: 3%; bottom: 0.25cm; width: 62%; height: 0.35cm; background: rgba(255,255,255,0.95); color: #111827; display: table; text-align: center; border-radius: 0 0 2px 2px; z-index: 20;">
+                        <span style="display: table-cell; vertical-align: middle; padding-bottom: 2px; font-size: 7px; font-weight: 900; line-height: 1;">NISN: ${s.nis}</span>
+                    </div>`;
 
                 let back = document.createElement('div'); back.style.cssText = cardStyle;
                 if (bgBack) back.style.backgroundImage = `url("${bgBack}")`;
@@ -647,7 +608,7 @@
             }
     
             window.onafterprint = () => { container.classList.add('hidden', 'no-print'); container.style.display = 'none'; window.onafterprint = null; };
-            setTimeout(() => { window.print(); }, 2000);
+            setTimeout(() => { window.print(); }, 1000);
         };
 
         window.printLaporanResmi = () => {
@@ -687,12 +648,7 @@
             let schoolName = appState.settings.schoolName || "SD NEGERI 06 MANADO"; let namaKepsek = appState.settings.namaKepsek || "........................."; let nipKepsek = appState.settings.nipKepsek || "........................."; let namaWali = appState.user.role === 'Wali Kelas' ? appState.user.name : "........................."; let nipWali = (appState.user.role === 'Wali Kelas' && appState.user.nip) ? appState.user.nip : ".........................";
             let logoManado = appState.settings.kopLogoKiri || "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Lambang_Kota_Manado.svg/512px-Lambang_Kota_Manado.svg.png"; let logoTutWuri = appState.settings.kopLogoKanan || "https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg";
             
-            let photoSrc = student.photoUrl; 
-            if (photoSrc && photoSrc.startsWith('http')) {
-                photoSrc = await window.getBase64FromUrl(photoSrc);
-            } else {
-                photoSrc = 'https://placehold.co/300x400/ffffff/64748b?text=FOTO+SISWA';
-            }
+            let photoSrc = student.photoUrl || 'https://placehold.co/300x400/ffffff/64748b?text=FOTO+SISWA'; 
 
             let html = `<div style="width: 297mm; height: 210mm; background: white; padding: 20px; box-sizing: border-box; position: relative;"><div style="width: 100%; height: 100%; border: 8px solid #d4af37; padding: 10px; box-sizing: border-box;"><div style="width: 100%; height: 100%; border: 2px solid #d4af37; padding: 30px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; position: relative; background: radial-gradient(circle, rgba(255,255,255,1) 60%, rgba(253,248,228,0.4) 100%);"><div style="display: flex; justify-content: space-between; width: 100%; position: absolute; top: 30px; padding: 0 40px; box-sizing: border-box;"><img src="${logoManado}" style="width: 100px; height: 100px; object-fit: contain;"><img src="${logoTutWuri}" style="width: 100px; height: 100px; object-fit: contain;"></div><h1 style="font-family: 'Times New Roman', serif; font-size: 42px; color: #1e3a8a; margin: 20px 0 5px 0; font-weight: 900; letter-spacing: 2px; text-transform: uppercase;">PIAGAM PENGHARGAAN</h1><h2 style="font-family: 'Arial', sans-serif; font-size: 20px; color: #4b5563; margin: 0 0 30px 0; font-weight: bold; letter-spacing: 1px;">BINTANG DISIPLIN & KEHADIRAN</h2><p style="font-family: 'Arial', sans-serif; font-size: 16px; color: #374151; margin-bottom: 25px;">Diberikan dengan penuh rasa bangga kepada:</p><div style="display: flex; align-items: center; gap: 30px; margin-bottom: 25px; background: rgba(255,255,255,0.8); padding: 15px 40px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #fde68a;"><img src="${photoSrc}" style="width: 120px; height: 150px; object-fit: contain; border-radius: 10px; border: 3px solid #d4af37;"><div style="text-align: left;"><h1 style="font-family: 'Times New Roman', serif; font-size: 48px; color: #111827; margin: 0 0 5px 0; font-weight: bold; border-bottom: 2px dashed #cbd5e1; padding-bottom: 5px;">${student.name}</h1><p style="font-family: 'Arial', sans-serif; font-size: 18px; color: #4b5563; margin: 5px 0 0 0; font-weight: bold;">NISN: ${student.nis} <span style="margin: 0 15px; color: #9ca3af;">|</span> KELAS: ${student.class}</p></div></div><p style="font-family: 'Arial', sans-serif; font-size: 16px; color: #374151; text-align: center; max-width: 80%; line-height: 1.6;">Atas prestasi gemilangnya dalam menjaga kedisiplinan dengan rekor <b style="color: #047857;">Hadir 100% Tepat Waktu (Tanpa Alpha, Izin, Sakit, & Terlambat)</b> sepanjang bulan <b>${monthName.toUpperCase()}</b>. Semoga menjadi teladan yang baik bagi seluruh siswa ${schoolName}.</p><div style="display: flex; justify-content: space-between; width: 100%; margin-top: auto; padding: 0 50px; box-sizing: border-box;"><div style="text-align: center; font-family: 'Arial', sans-serif;"><p style="margin: 0; font-size: 14px;">Mengetahui,</p><p style="margin: 0; font-size: 14px; margin-bottom: 70px;">Kepala Sekolah</p><p style="margin: 0; font-size: 16px; font-weight: bold; text-decoration: underline;">${namaKepsek}</p><p style="margin: 5px 0 0 0; font-size: 12px;">NIP. ${nipKepsek}</p></div><div style="text-align: center; font-family: 'Arial', sans-serif;"><p style="margin: 0; font-size: 14px;">Manado, ${new Date().getDate()} ${monthName}</p><p style="margin: 0; font-size: 14px; margin-bottom: 70px;">Wali Kelas ${student.class}</p><p style="margin: 0; font-size: 16px; font-weight: bold; text-decoration: underline;">${namaWali}</p><p style="margin: 5px 0 0 0; font-size: 12px;">NIP. ${nipWali}</p></div></div><div style="position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; background: #d4af37; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 4px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.2);"><span style="font-size: 36px; color: white;">🏆</span></div></div></div></div>`;
 
@@ -825,8 +781,8 @@
             const areaBintang = document.getElementById('dash-bintang-disiplin');
             if (areaBintang) {
                 if (kandidatBintang) {
-                    let photoSrc = kandidatBintang.photoUrl && (kandidatBintang.photoUrl.startsWith('http') || kandidatBintang.photoUrl.startsWith('data:image')) ? kandidatBintang.photoUrl : 'data:image/svg+xml;base64,...';
-                    areaBintang.innerHTML = `<div class="absolute top-0 right-0 w-32 h-32 bg-amber-200 rounded-bl-full opacity-20 -z-10"></div><img src="${photoSrc}" class="w-24 h-24 md:w-32 md:h-32 object-contain rounded-full border-4 border-amber-400 shadow-lg mb-3 bg-white"><h4 class="font-black text-lg text-slate-800 text-center uppercase leading-tight">${kandidatBintang.name}</h4><p class="text-sm font-bold text-amber-600 mb-2">${kandidatBintang.class} | Hadir 100%</p><p class="text-[10px] text-gray-500 text-center px-4 mb-4">Tanpa rekor Terlambat, Sakit, Izin, ataupun Alpa bulan ini.</p><button onclick="cetakPiagam('${kandidatBintang.id}', ${activeDaysCount}, '${monthName}')" class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-md transition transform hover:scale-105 flex items-center text-sm w-full max-w-[200px] justify-center"><i class="fas fa-print mr-2"></i> Cetak Piagam</button>`;
+                    let photoSrc = kandidatBintang.photoUrl || 'https://placehold.co/150x150/ffffff/64748b?text=Foto';
+                    areaBintang.innerHTML = `<div class="absolute top-0 right-0 w-32 h-32 bg-amber-200 rounded-bl-full opacity-20 -z-10"></div><img src="${photoSrc}" crossorigin="anonymous" onerror="this.onerror=null; this.src='https://placehold.co/150x150/ffffff/64748b?text=Foto';" class="w-24 h-24 md:w-32 md:h-32 object-cover rounded-full border-4 border-amber-400 shadow-lg mb-3 bg-white"><h4 class="font-black text-lg text-slate-800 text-center uppercase leading-tight">${kandidatBintang.name}</h4><p class="text-sm font-bold text-amber-600 mb-2">${kandidatBintang.class} | Hadir 100%</p><p class="text-[10px] text-gray-500 text-center px-4 mb-4">Tanpa rekor Terlambat, Sakit, Izin, ataupun Alpa bulan ini.</p><button onclick="cetakPiagam('${kandidatBintang.id}', ${activeDaysCount}, '${monthName}')" class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-md transition transform hover:scale-105 flex items-center text-sm w-full max-w-[200px] justify-center"><i class="fas fa-print mr-2"></i> Cetak Piagam</button>`;
                 } else {
                     areaBintang.innerHTML = `<div class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center w-full h-full flex flex-col items-center justify-center"><i class="fas fa-star-half-alt text-4xl text-gray-300 mb-3"></i><p class="text-sm font-bold text-gray-400">Belum ada kandidat Bintang Disiplin.</p><p class="text-xs text-gray-400 mt-2">Syarat: Hadir 100% tanpa Alpa, Sakit, Izin, maupun Terlambat pada bulan berjalan.</p></div>`;
                 }
@@ -1178,6 +1134,9 @@
             UI.html('siswa-class-filter', classOptions); loadStudentTable();
         };
 
+        // ==========================================
+        // FITUR TABEL DENGAN ANTI-BLOKIR CHROME MURNI
+        // ==========================================
         window.loadStudentTable = () => {
             const cls = UI.val('siswa-class-filter'); const search = UI.val('siswa-search')?.toLowerCase() || ''; let filtered = appState.students;
             if(cls !== 'ALL') filtered = filtered.filter(s => s.class === cls); if(search) filtered = filtered.filter(s => s.name.toLowerCase().includes(search) || s.nis.includes(search));
@@ -1188,12 +1147,11 @@
                 tbody = `<tr><td colspan="6" class="text-center p-8 bg-white font-semibold text-gray-500">Tidak ada data.</td></tr>`;
             } else {
                 filtered.forEach((s, i) => {
-                    let photoSrc = s.photoUrl; 
-                    let isValidPhoto = photoSrc && (photoSrc.startsWith('http') || photoSrc.startsWith('data:image'));
+                    let rawUrl = s.photoUrl || '';
                     
-                    let photoHtml = isValidPhoto 
-                        ? `<img src="${photoSrc}" style="width: 40px; height: 56px; object-fit: cover; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); cursor: pointer;" onclick="triggerPhotoUpload('${s.id}')" title="Ubah Foto">` 
-                        : `<div onclick="triggerPhotoUpload('${s.id}')" style="width: 40px; height: 56px; background: #e2e8f0; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #94a3b8; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Unggah Foto"><i class="fas fa-camera"></i></div>`;
+                    let photoHtml = rawUrl 
+                        ? `<img src="${rawUrl}" referrerpolicy="no-referrer" onerror="this.onerror=null; this.src='https://placehold.co/40x56/f8fafc/9ca3af?text=Foto';" style="width: 40px; height: 56px; object-fit: cover; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); cursor: pointer; background: transparent;" onclick="triggerPhotoUpload('${s.id}')" title="Ubah Foto">` 
+                        : `<div onclick="triggerPhotoUpload('${s.id}')" style="width: 40px; height: 56px; background: #e2e8f0; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #94a3b8; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Unggah Foto"><span class="text-[10px] font-bold">Foto</span></div>`;
                     
                     tbody += `<tr class="hover:bg-slate-50 bg-white border-b">
                         <td class="p-3 text-center">${i+1}</td>
@@ -1201,7 +1159,7 @@
                         <td class="p-3 font-semibold">${s.name}<br><span class="text-xs text-gray-500 font-mono">NISN: ${s.nis}</span></td>
                         <td class="p-3 text-center font-bold text-emerald-700 bg-emerald-50">${s.class}</td>
                         <td class="p-3"><div class="flex items-center gap-2"><i class="fab fa-whatsapp text-green-500 text-lg"></i><input type="number" id="phone_${s.id}" class="border rounded p-2 text-sm w-full md:w-48 outline-none focus:border-emerald-500 font-mono" value="${s.parentPhone || ''}" placeholder="Cth: 0812345..."><button onclick="savePhone('${s.id}')" class="bg-slate-200 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 px-3 py-2 rounded font-bold transition shadow-sm"><i class="fas fa-save"></i></button></div></td>
-                        <td class="p-3 text-center"><div class="flex flex-col gap-1 items-center"><button onclick="generateSingleQR('${s.id}')" class="bg-slate-800 hover:bg-slate-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-print mr-1"></i> Cetak</button><button onclick="downloadSinglePNG('${s.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-image mr-1"></i> PNG</button></div></td>
+                        <td class="p-3 text-center"><div class="flex flex-col gap-1 items-center"><button onclick="generateSingleQR('${s.id}')" class="bg-slate-800 hover:bg-slate-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-print mr-1"></i> Cetak</button><button onclick="downloadSinglePNG('${s.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-image mr-1"></i> PNG HD</button></div></td>
                     </tr>`;
                 });
             }
@@ -1307,6 +1265,7 @@
     <div id="print-report-area" class="hidden no-print text-center p-4"></div>
     <div id="offscreen-cards" style="position:fixed; top:-9999px; left:-9999px; z-index:-9999;"></div>
     
+    <!-- Input Upload Khusus Siswa (Mendukung PNG transparan) -->
     <input type="file" id="student-photo-upload" accept="image/png, image/jpeg" class="hidden" onchange="handleImageUpload(event, 'student')">
 
     <div id="login-screen" class="flex-1 flex items-center justify-center relative overflow-hidden bg-slate-900 p-4">
