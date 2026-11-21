@@ -46,6 +46,36 @@
         #sidebar { transition: transform 0.3s ease-in-out; z-index: 50; }
         #sidebar-overlay { z-index: 40; }
 
+        /* MODE LAYAR PENUH (FOKUS SCANNER GERBANG) */
+        body.scanner-fullscreen #sidebar,
+        body.scanner-fullscreen #sidebar-overlay,
+        body.scanner-fullscreen header,
+        body.scanner-fullscreen #scanner-mode-switcher { display: none !important; }
+        body.scanner-fullscreen #view-scanner {
+            padding: 1.25rem 1.5rem 2rem 1.5rem;
+            background: linear-gradient(180deg, #f8fafc 0%, #ecfdf5 100%);
+        }
+        body.scanner-fullscreen #scanner-top-bar {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            width: auto;
+            max-width: none;
+            margin: 0;
+            z-index: 60;
+        }
+        body.scanner-fullscreen #scanner-time {
+            font-size: clamp(3.5rem, 7vw, 5.25rem);
+            line-height: 1.05;
+        }
+        body.scanner-fullscreen #scanner-card-box {
+            max-width: 600px;
+            box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.18);
+        }
+        body.scanner-fullscreen #recent-scans-panel {
+            max-width: 600px;
+        }
+
         @media print {
             body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; margin: 0; padding: 0; }
             #app-screen, #login-screen { display: none !important; }
@@ -80,7 +110,10 @@
         window.appState = {
             user: null, sidebarOpen: false, students: [], grades: {}, attendance: {}, settings: {}, teachers: [],
             bukuSaku: {}, 
-            scannedStudent: null, html5QrcodeScanner: null, currentView: 'scanner', scannerMode: 'absensi', isProcessingScan: false
+            scannedStudent: null, html5QrcodeScanner: null, currentView: 'scanner', scannerMode: 'absensi', isProcessingScan: false,
+            fastScanMode: localStorage.getItem('sipandai06_fast_scan') === '1',
+            recentScans: [],
+            lastScanGuard: { id: null, time: 0 }
         };
 
         window.currentFacingMode = "environment";
@@ -401,6 +434,7 @@
         }
 
         window.doLogout = () => {
+            exitScannerFullscreen();
             appState.user = null; UI.hide('app-screen'); UI.show('login-screen'); document.getElementById('login-form').reset();
             if(appState.html5QrcodeScanner) { appState.html5QrcodeScanner.stop().then(() => { appState.html5QrcodeScanner.clear(); appState.html5QrcodeScanner = null; }).catch(err => { appState.html5QrcodeScanner = null; }); }
             if(window.chartInstance1) window.chartInstance1.destroy(); if(window.chartInstance2) window.chartInstance2.destroy();
@@ -418,6 +452,7 @@
         window.closeSidebar = () => { if (window.innerWidth < 1024 && appState.sidebarOpen) toggleSidebar(); };
 
         window.switchView = (viewName, subMode = null) => {
+            if (viewName !== 'scanner') exitScannerFullscreen();
             appState.currentView = viewName; 
             if (viewName === 'scanner') window.scannerMode = subMode || 'absensi';
             window.isProcessingScan = false; 
@@ -812,7 +847,11 @@
             let content = `
             <div class="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div><h2 class="text-2xl md:text-3xl font-black text-slate-800 font-russo tracking-wide">Dasbor Kehadiran <span class="text-emerald-500">Hari Ini</span></h2><p class="text-gray-500 font-bold tracking-wide text-sm mt-1 uppercase"><i class="fas fa-globe text-blue-500 mr-1"></i> ${infoDesc}</p></div>
-                <button onclick="initDashboardCharts()" class="bg-white border border-gray-200 text-gray-600 hover:text-emerald-600 hover:border-emerald-300 px-4 py-2 rounded-lg font-bold shadow-sm transition"><i class="fas fa-sync-alt mr-2"></i> Segarkan Data</button>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="sendDailyReportWA()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold shadow-sm transition text-sm flex items-center gap-2"><i class="fab fa-whatsapp text-base"></i> Kirim Laporan WA</button>
+                    <button onclick="copyDailyReport()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-bold shadow-sm transition text-sm flex items-center gap-2"><i class="fas fa-copy"></i> Salin Laporan</button>
+                    <button onclick="initDashboardCharts()" class="bg-white border border-gray-200 text-gray-600 hover:text-emerald-600 hover:border-emerald-300 px-4 py-2 rounded-lg font-bold shadow-sm transition text-sm"><i class="fas fa-sync-alt mr-1.5"></i> Segarkan</button>
+                </div>
             </div>
             
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
@@ -971,6 +1010,267 @@
             else if (ctx2) { let classLabels = [...new Set(targetStds.map(s => s.class))].sort(); let classData = []; classLabels.forEach(c => { let stdsInClass = targetStds.filter(s => s.class === c); let hInClass = 0; if(appState.attendance[todayKey]) { stdsInClass.forEach(s => { if(appState.attendance[todayKey][s.id]) { let st = appState.attendance[todayKey][s.id].status; if(st === 'Hadir' || st === 'Terlambat') hInClass++; } }); } classData.push(stdsInClass.length > 0 ? Math.round((hInClass/stdsInClass.length)*100) : 0); }); window.chartInstance2 = new Chart(ctx2, { type: 'bar', data: { labels: classLabels, datasets: [{ label: '% Hadir', data: classData, backgroundColor: '#10b981', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, ticks: { callback: function(value){ return value + '%' } } } } } }); }
         };
 
+        // ==========================================
+        // FITUR NO. 3: LAPORAN HARIAN 1-KLIK KE WA
+        // ==========================================
+        window.generateDailyReportText = (useEmoji = true) => {
+            const isWali = appState.user?.role === 'Wali Kelas';
+            let targetStds = isWali ? appState.students.filter(s => s.class === appState.user.assignedClass) : appState.students;
+            let tzoffset = (new Date()).getTimezoneOffset() * 60000;
+            const todayDate = new Date(Date.now() - tzoffset);
+            const todayKey = todayDate.toISOString().split('T')[0];
+            const dateFormatted = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            const timeNow = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            const schoolName = (appState.settings.schoolName || 'SD NEGERI 06 MANADO').toUpperCase();
+
+            let countHadir = 0, countTelat = 0, countSakit = 0, countIzin = 0, countAlpa = 0, countBelum = 0;
+            targetStds.forEach(s => {
+                const rec = appState.attendance?.[todayKey]?.[s.id];
+                if (rec) {
+                    if (rec.status === 'Hadir') countHadir++;
+                    else if (rec.status === 'Terlambat') countTelat++;
+                    else if (rec.status === 'Sakit') countSakit++;
+                    else if (rec.status === 'Izin') countIzin++;
+                    else if (rec.status === 'Alpa') countAlpa++;
+                } else {
+                    countBelum++;
+                }
+            });
+
+            const total = targetStds.length;
+            const pctHadir = total > 0 ? Math.round((countHadir / total) * 100) : 0;
+            const pctTelat = total > 0 ? Math.round((countTelat / total) * 100) : 0;
+
+            let perfectClasses = [];
+            if (!isWali) {
+                const classNames = [...new Set(targetStds.map(s => s.class))].sort();
+                perfectClasses = classNames.filter(c => {
+                    const stdsInClass = targetStds.filter(s => s.class === c);
+                    if (stdsInClass.length === 0) return false;
+                    return stdsInClass.every(s => {
+                        const st = appState.attendance?.[todayKey]?.[s.id]?.status;
+                        return st === 'Hadir' || st === 'Terlambat';
+                    });
+                });
+            }
+
+            const footerLine = isWali
+                ? `_Wali Kelas ${appState.user.assignedClass} - Sistem Absensi SIPANDAI 06_`
+                : `_Laporan otomatis dari Sistem Absensi SIPANDAI 06_`;
+
+            // Mode khusus link WhatsApp (tanpa emoji agar 100% bebas tanda tanya di halaman wa.me)
+            if (!useEmoji) {
+                const titleLine = isWali
+                    ? `*LAPORAN KEHADIRAN KELAS ${appState.user.assignedClass}*`
+                    : `*LAPORAN KEHADIRAN HARIAN*`;
+                const extraClassLine = !isWali
+                    ? (perfectClasses.length > 0
+                        ? `\n\n*Kelas 100% Hadir Hari Ini:*\n${perfectClasses.join(', ')}`
+                        : `\n\n*Kelas 100% Hadir:* Belum ada`)
+                    : '';
+                return `${titleLine}\n*${schoolName}*\n${dateFormatted} | Pkl ${timeNow} WITA\n\n- *Total Siswa:* ${total} Siswa\n- *Hadir Tepat Waktu:* ${countHadir} siswa (${pctHadir}%)\n- *Terlambat:* ${countTelat} siswa (${pctTelat}%)\n- *Sakit:* ${countSakit} | *Izin:* ${countIzin} | *Alpa:* ${countAlpa}\n- *Belum Diabsen:* ${countBelum} siswa${extraClassLine}\n\n${footerLine}`;
+            }
+
+            // Mode Salin Laporan (tetap menggunakan emoji lengkap)
+            const titleLine = isWali
+                ? `📊 *LAPORAN KEHADIRAN KELAS ${appState.user.assignedClass}*`
+                : `📊 *LAPORAN KEHADIRAN HARIAN*`;
+            const extraClassLine = !isWali
+                ? (perfectClasses.length > 0
+                    ? `\n\n🏆 *Kelas 100% Hadir Hari Ini:*\n${perfectClasses.join(', ')}`
+                    : `\n\n📌 *Kelas 100% Hadir:* Belum ada`)
+                : '';
+
+            return `${titleLine}\n*${schoolName}*\n🗓️ ${dateFormatted} | ⏰ Pkl ${timeNow} WITA\n\n👥 *Total Siswa:* ${total} Siswa\n✅ *Hadir Tepat Waktu:* ${countHadir} siswa (${pctHadir}%)\n⏰ *Terlambat:* ${countTelat} siswa (${pctTelat}%)\n🏥 *Sakit:* ${countSakit} | ✉️ *Izin:* ${countIzin} | ❌ *Alpa:* ${countAlpa}\n⏳ *Belum Diabsen:* ${countBelum} siswa${extraClassLine}\n\n${footerLine}`;
+        };
+
+        window.sendDailyReportWA = () => {
+            const msg = generateDailyReportText(false);
+            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+        };
+
+        window.copyDailyReport = () => {
+            const msg = generateDailyReportText(true);
+            const textarea = document.createElement('textarea');
+            textarea.value = msg;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                UI.toast('Teks laporan harian disalin! Tinggal Paste ke Grup WA.', 'success');
+            } catch (e) {
+                UI.toast('Gagal menyalin teks laporan.', 'error');
+            }
+            document.body.removeChild(textarea);
+        };
+
+        // ==========================================
+        // FITUR NO. 1: MODE GERBANG KILAT (FAST-SCAN)
+        // ==========================================
+        window.toggleFastScanMode = () => {
+            appState.fastScanMode = !appState.fastScanMode;
+            localStorage.setItem('sipandai06_fast_scan', appState.fastScanMode ? '1' : '0');
+            updateFastScanUI();
+            UI.toast(appState.fastScanMode ? '⚡ Mode Gerbang Kilat AKTIF (Jeda 1 Detik)' : 'Mode Normal AKTIF (Jeda 3 Detik)', 'success');
+        };
+
+        // ==========================================
+        // MODE LAYAR PENUH (FOKUS SCANNER GERBANG)
+        // ==========================================
+        window.updateFullscreenBtnUI = () => {
+            const btn = document.getElementById('btn-scanner-fullscreen');
+            if (!btn) return;
+            const isFs = document.body.classList.contains('scanner-fullscreen');
+            if (isFs) {
+                btn.className = 'bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-lg transition flex items-center justify-center gap-2 shrink-0';
+                btn.innerHTML = '<i class="fas fa-compress"></i> <span>Keluar Layar Penuh</span>';
+            } else {
+                btn.className = 'bg-slate-800 hover:bg-slate-700 text-white px-3.5 py-2.5 rounded-xl font-bold text-xs shadow-sm transition flex items-center justify-center gap-1.5 shrink-0';
+                btn.innerHTML = '<i class="fas fa-expand"></i> <span>Layar Penuh</span>';
+            }
+        };
+
+        window.exitScannerFullscreen = () => {
+            if (document.body.classList.contains('scanner-fullscreen')) {
+                document.body.classList.remove('scanner-fullscreen');
+                updateFullscreenBtnUI();
+            }
+            if (document.fullscreenElement && document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+            }
+        };
+
+        window.toggleScannerFullscreen = () => {
+            const willEnter = !document.body.classList.contains('scanner-fullscreen');
+            if (willEnter) {
+                document.body.classList.add('scanner-fullscreen');
+                updateFullscreenBtnUI();
+                const el = document.documentElement;
+                if (el.requestFullscreen) {
+                    el.requestFullscreen().catch(() => {});
+                } else if (el.webkitRequestFullscreen) {
+                    el.webkitRequestFullscreen();
+                }
+                UI.toast('Mode Layar Penuh aktif! Tekan ESC atau tombol merah di kanan atas untuk keluar.', 'success');
+            } else {
+                exitScannerFullscreen();
+            }
+        };
+
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement && document.body.classList.contains('scanner-fullscreen')) {
+                document.body.classList.remove('scanner-fullscreen');
+                updateFullscreenBtnUI();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.body.classList.contains('scanner-fullscreen')) {
+                exitScannerFullscreen();
+            }
+        });
+
+        window.updateFastScanUI = () => {
+            const wrap = document.getElementById('fast-scan-toggle-wrap');
+            const btnNormal = document.getElementById('btn-speed-normal');
+            const btnFast = document.getElementById('btn-speed-fast');
+            const recentPanel = document.getElementById('recent-scans-panel');
+            const isBukuSaku = window.scannerMode === 'bukusaku';
+
+            if (wrap) wrap.classList.toggle('hidden', isBukuSaku);
+            if (recentPanel) recentPanel.classList.toggle('hidden', isBukuSaku || !appState.fastScanMode);
+
+            if (btnNormal && btnFast) {
+                if (appState.fastScanMode) {
+                    btnFast.className = 'flex-1 py-2 px-3 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 bg-amber-500 text-white shadow';
+                    btnNormal.className = 'flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-500 hover:bg-white/60';
+                } else {
+                    btnNormal.className = 'flex-1 py-2 px-3 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow';
+                    btnFast.className = 'flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-500 hover:bg-white/60';
+                }
+            }
+            renderRecentScans();
+        };
+
+        window.showFastScanBanner = (student, status, timeStr, badge, poin) => {
+            const banner = document.getElementById('fast-scan-banner');
+            if (!banner) return;
+            if (window.fastBannerTimeout) clearTimeout(window.fastBannerTimeout);
+
+            let rawPhoto = student.photoUrl || '';
+            let photoSrc = rawPhoto.startsWith('http') ? `https://wsrv.nl/?url=${rawPhoto.replace(/^https?:\/\//, '')}&output=png` : rawPhoto;
+            let photoHtml = photoSrc
+                ? `<img src="${photoSrc}" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="this.style.display='none'" class="w-12 h-14 object-cover rounded-lg border-2 border-white/70 shadow shrink-0 bg-white">`
+                : `<div class="w-12 h-14 rounded-lg bg-white/20 flex items-center justify-center text-white font-black text-lg shrink-0"><i class="fas fa-user"></i></div>`;
+
+            let bgTheme = 'bg-emerald-600 border-emerald-300';
+            let statusLabel = 'HADIR';
+            if (status === 'Terlambat') { bgTheme = 'bg-amber-500 border-amber-200'; statusLabel = 'TERLAMBAT'; }
+            else if (status === 'Sudah Absen') { bgTheme = 'bg-blue-600 border-blue-300'; statusLabel = 'SUDAH ABSEN'; }
+
+            banner.className = `mb-3 rounded-2xl p-3 text-white border-2 shadow-lg flex items-center justify-between gap-3 animate-fade-in ${bgTheme}`;
+            banner.innerHTML = `
+                <div class="flex items-center gap-3 min-w-0 text-left">
+                    ${photoHtml}
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="bg-white/25 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase">${student.class}</span>
+                            <span class="bg-black/20 text-white text-[10px] font-bold px-2 py-0.5 rounded">${badge.shortLabel} • ⭐ ${poin}</span>
+                        </div>
+                        <p class="font-black text-sm uppercase truncate mt-0.5">${student.name}</p>
+                        <p class="text-[11px] opacity-90 font-semibold"><i class="fas fa-clock mr-1"></i> ${timeStr} WITA</p>
+                    </div>
+                </div>
+                <span class="bg-white text-slate-900 text-xs font-black px-3 py-1.5 rounded-xl shadow shrink-0">${statusLabel}</span>
+            `;
+            banner.classList.remove('hidden');
+            window.fastBannerTimeout = setTimeout(() => { banner.classList.add('hidden'); }, 3000);
+        };
+
+        window.renderRecentScans = () => {
+            const listEl = document.getElementById('recent-scans-list');
+            const badgeCount = document.getElementById('recent-scans-count');
+            if (!listEl) return;
+
+            if (badgeCount) badgeCount.innerText = `${appState.recentScans.length} Terbaru`;
+            if (appState.recentScans.length === 0) {
+                listEl.innerHTML = `<div class="p-4 text-center text-xs text-slate-400 font-semibold">Belum ada siswa yang di-scan pada sesi ini.</div>`;
+                return;
+            }
+
+            listEl.innerHTML = appState.recentScans.map(item => {
+                const isLate = item.status === 'Terlambat';
+                const statusBadge = isLate
+                    ? `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-black">TERLAMBAT</span>`
+                    : `<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-black">HADIR</span>`;
+
+                let waBtn = '';
+                if (isLate) {
+                    let phone = (item.parentPhone || '').toString().trim();
+                    if (phone.startsWith('0')) phone = '62' + phone.substring(1);
+                    if (phone) {
+                        const msg = `*PEMBERITAHUAN KEHADIRAN*\n\nYth. Orang Tua/Wali dari *${item.name}*,\n\nKami menginformasikan bahwa ananda telah tiba di sekolah pada pukul *${item.time} WITA* dengan status kehadiran: *TERLAMBAT*.\n\nMohon bimbingan di rumah agar ananda dapat berangkat lebih awal. Terima kasih.\n\n_Sistem Absensi ${appState.settings.schoolName}_`;
+                        waBtn = `<a href="https://wa.me/${phone}?text=${encodeURIComponent(msg)}" target="_blank" class="bg-emerald-500 hover:bg-emerald-600 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-sm" title="Kirim WA Terlambat"><i class="fab fa-whatsapp"></i> WA</a>`;
+                    }
+                }
+
+                return `
+                    <div class="px-3.5 py-2.5 flex items-center justify-between gap-2 bg-white hover:bg-slate-50">
+                        <div class="min-w-0 text-left">
+                            <p class="text-xs font-bold text-slate-800 truncate uppercase">${item.name}</p>
+                            <p class="text-[10px] text-slate-500 font-semibold">${item.class} • ${item.badgeShort} • <span class="font-mono">${item.time} WITA</span></p>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            ${statusBadge}
+                            ${waBtn}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
         function renderScanner() {
             let today = new Date(); let dateStr = today.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
             const dateEl = document.getElementById('scanner-date'); if (dateEl) dateEl.innerText = dateStr.toUpperCase();
@@ -989,6 +1289,7 @@
                 if(titleEl) titleEl.innerHTML = `ABSENSI <span class="text-emerald-500">KEHADIRAN</span>`;
                 if(subtitleEl) subtitleEl.innerHTML = `<i class="fas fa-qrcode mr-2 text-emerald-500"></i>Arahkan Kartu QR Siswa ke Kamera / Scanner`;
             }
+            updateFastScanUI();
         }
 
         window.startScanner = () => {
@@ -1007,16 +1308,33 @@
 
         window.processScan = (studentId) => {
             const student = appState.students.find(s => s.id === studentId); 
-            if (!student) { UI.toast("QR Code Tidak Dikenali!", "error"); UI.playBeep('error', 'Tidak Dikenali'); setTimeout(() => { window.isProcessingScan = false; }, 2000); return; }
+            if (!student) { UI.toast("QR Code Tidak Dikenali!", "error"); UI.playBeep('error', 'Tidak Dikenali'); setTimeout(() => { window.isProcessingScan = false; }, 1200); return; }
             appState.scannedStudent = student; 
 
             if (window.scannerMode === 'bukusaku') {
                 processBukuSaku(student);
             } else {
+                // Cegah kartu yang sama tidak sengaja terbaca 2x dalam 2.5 detik di Mode Gerbang Kilat
+                const nowMs = Date.now();
+                if (appState.fastScanMode && appState.lastScanGuard.id === student.id && (nowMs - appState.lastScanGuard.time) < 2500) {
+                    window.isProcessingScan = false;
+                    return;
+                }
+                appState.lastScanGuard = { id: student.id, time: nowMs };
+
                 const userSound = appState.settings.attendance?.scanSound || 'voice'; let tzoffset = (new Date()).getTimezoneOffset() * 60000; const todayKey = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
                 if (appState.attendance && appState.attendance[todayKey] && appState.attendance[todayKey][student.id]) {
                     const firstName = getStudentFirstName(student);
-                    const prevData = appState.attendance[todayKey][student.id]; UI.playBeep(userSound === 'voice' ? 'voice' : 'error', `Sudah Absen, ${firstName}`); UI.hide('scanner-idle');
+                    const prevData = appState.attendance[todayKey][student.id];
+                    UI.playBeep(userSound === 'voice' ? 'voice' : 'error', `Sudah Absen, ${firstName}`);
+                    if (appState.fastScanMode) {
+                        const sPoin = getStudentPoints(student.id);
+                        const sBadge = getStudentBadge(sPoin);
+                        showFastScanBanner(student, 'Sudah Absen', prevData.time, sBadge, sPoin);
+                        setTimeout(() => { window.isProcessingScan = false; }, 900);
+                        return;
+                    }
+                    UI.hide('scanner-idle');
                     const overlay = document.getElementById('scanner-action-overlay'); overlay.innerHTML = `<div class="animate-fade-in bg-blue-500 text-white rounded-3xl p-8 shadow-2xl text-center border-4 border-white w-full max-w-sm flex flex-col items-center justify-center"><i class="fas fa-info-circle text-7xl mb-4 animate-bounce"></i><h3 class="text-2xl font-black mb-2 uppercase tracking-wider">${student.name}</h3><div class="text-3xl font-black font-russo uppercase drop-shadow-md">SUDAH ABSEN</div><p class="text-base font-medium mt-3 opacity-90 mb-4"><i class="fas fa-history mr-1"></i> Tercatat pkl ${prevData.time} WITA</p><button onclick="resumeAfterSave()" class="bg-white text-blue-600 px-6 py-3 rounded-xl font-bold w-full shadow-lg transition transform hover:scale-105 active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan</button></div>`; overlay.style.display = 'flex'; window.lateTimeout = setTimeout(() => { resumeAfterSave(); }, 4000); return; 
                 }
                 let timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -1136,14 +1454,40 @@
             if (!appState.attendance) appState.attendance = {}; if (!appState.attendance[todayKey]) appState.attendance[todayKey] = {};
             appState.attendance[todayKey][student.id] = { status: status, time: timeStr };
             
-            try { 
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_attendance', 'data'); 
-                await setDoc(docRef, { attendance: { [todayKey]: { [student.id]: { status: status, time: timeStr } } } }, { merge: true }); 
-            } catch(e) { console.error(e); UI.toast("Gagal menyimpan ke cloud!", "error"); }
-            
             const studentPoin = getStudentPoints(student.id);
             const studentBadge = getStudentBadge(studentPoin);
             const firstName = getStudentFirstName(student);
+
+            // Simpan ke daftar 5 siswa terakhir masuk
+            appState.recentScans = appState.recentScans.filter(x => x.id !== student.id);
+            appState.recentScans.unshift({
+                id: student.id,
+                name: student.name,
+                class: student.class,
+                status: status,
+                time: timeStr,
+                parentPhone: student.parentPhone || '',
+                badgeShort: studentBadge.shortLabel
+            });
+            if (appState.recentScans.length > 5) appState.recentScans.pop();
+            renderRecentScans();
+
+            // Simpan ke Cloud di belakang layar agar tidak menahan antrean di Mode Gerbang Kilat
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_attendance', 'data');
+            setDoc(docRef, { attendance: { [todayKey]: { [student.id]: { status: status, time: timeStr } } } }, { merge: true })
+                .catch(e => { console.error(e); UI.toast("Gagal menyimpan ke cloud!", "error"); });
+
+            if (appState.fastScanMode) {
+                if (status === 'Terlambat') {
+                    UI.playBeep(userSound === 'voice' ? 'voice' : 'error', `Siswa Terlambat, ${firstName}`);
+                } else {
+                    UI.playBeep(userSound, `Absen Berhasil, ${firstName}`);
+                }
+                showFastScanBanner(student, status, timeStr, studentBadge, studentPoin);
+                appState.scannedStudent = null;
+                setTimeout(() => { window.isProcessingScan = false; }, 900);
+                return;
+            }
 
             UI.hide('scanner-idle'); const overlay = document.getElementById('scanner-action-overlay');
             if (status === 'Terlambat') {
@@ -1509,30 +1853,44 @@
                     <input type="password" id="login-password" placeholder="Kata Sandi" class="input-glow w-full p-4 border border-slate-600 rounded-xl bg-slate-900/80 text-white font-medium outline-none pr-12" required>
                     <button type="button" onclick="togglePasswordVisibility('login-password', 'eye-icon-login')" class="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-white transition"><i id="eye-icon-login" class="fas fa-eye"></i></button>
                 </div>
-                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold p-4 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all font-poppins text-lg tracking-wide">MASUK APLIKASI</button>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold p-4 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all font-poppins tracking-wide">MASUK APLIKASI</button>
             </form>
         </div>
     </div>
 
-    <div id="app-screen" class="hidden flex h-screen w-full relative">
-        <div id="sidebar-overlay" onclick="closeSidebar()" class="fixed inset-0 bg-slate-900/60 z-30 hidden lg:hidden"></div>
-        <aside id="sidebar" class="w-72 bg-slate-900 text-white shadow-2xl flex flex-col z-40 fixed inset-y-0 left-0 transform -translate-x-full lg:relative lg:translate-x-0 transition-transform duration-300 no-print">
-            <div class="p-6 border-b border-slate-800 flex items-center justify-between"><div class="flex items-center gap-3"><i class="fas fa-qrcode text-3xl text-emerald-400"></i><div><h2 class="text-xl font-russo leading-tight">ABSENSI <span class="text-emerald-400">06</span></h2></div></div><button onclick="closeSidebar()" class="lg:hidden text-slate-400 hover:text-white text-xl"><i class="fas fa-times"></i></button></div>
-            <nav id="sidebar-menu" class="flex-1 py-4 flex flex-col gap-1 overflow-y-auto"></nav>
+    <div id="app-screen" class="hidden flex-1 flex h-screen w-full overflow-hidden relative bg-slate-50">
+        <div id="sidebar-overlay" onclick="closeSidebar()" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300 lg:hidden"></div>
+        <aside id="sidebar" class="w-72 bg-slate-900 text-white shadow-2xl flex flex-col fixed inset-y-0 left-0 transform -translate-x-full lg:relative lg:translate-x-0 transition-transform no-print">
+            <div class="p-6 border-b border-slate-800 flex items-center justify-between">
+                <h2 class="text-2xl font-russo tracking-wide">ABSENSI <span class="text-emerald-400">06</span></h2>
+                <button type="button" onclick="closeSidebar()" class="lg:hidden text-slate-400 hover:text-white text-xl"><i class="fas fa-times"></i></button>
+            </div>
+            <nav id="sidebar-menu" class="flex-1 py-4 flex flex-col gap-1 overflow-y-auto font-poppins text-sm"></nav>
+            <div class="p-4 border-t border-slate-800">
+                <button type="button" onclick="doLogout()" class="w-full p-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-xl font-bold transition flex items-center justify-center gap-2"><i class="fas fa-sign-out-alt"></i> KELUAR</button>
+            </div>
         </aside>
 
-        <main class="flex-1 overflow-hidden flex flex-col w-full relative bg-slate-50">
-            <header class="bg-white shadow-sm border-b h-16 flex items-center justify-between px-4 md:px-6 z-20 sticky top-0 no-print shrink-0">
-                <div class="flex items-center gap-4"><button onclick="toggleSidebar()" class="text-gray-600 hover:text-emerald-600 text-xl p-2 rounded-lg bg-gray-100 hover:bg-emerald-50 transition"><i class="fas fa-bars"></i></button><span id="header-school-name" class="font-bold text-gray-800 hidden sm:block tracking-wide uppercase">Sistem Kehadiran</span></div>
-                <div class="flex items-center gap-4"><div class="text-right hidden md:block"><p class="text-sm font-bold text-gray-800" id="header-user-name">Nama Petugas</p><p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest" id="header-user-role">Role</p></div><button onclick="doLogout()" class="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-bold text-sm transition border border-red-200"><i class="fas fa-sign-out-alt mr-2"></i>Keluar</button></div>
+        <main class="flex-1 flex flex-col h-screen overflow-hidden relative w-full">
+            <header class="bg-white shadow-sm border-b h-16 flex items-center justify-between px-4 md:px-6 z-20 sticky top-0 no-print">
+                <div class="flex items-center gap-3">
+                    <button type="button" onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-lg"><i class="fas fa-bars text-xl"></i></button>
+                    <h1 id="header-school-name" class="font-black text-slate-800 tracking-wide uppercase text-sm md:text-base">SD NEGERI 06 MANADO</h1>
+                </div>
+                <div class="flex items-center gap-3 bg-slate-50 px-3.5 py-1.5 rounded-full border border-slate-200">
+                    <div class="text-right leading-tight">
+                        <p id="header-user-name" class="text-xs md:text-sm font-bold text-slate-800">Pengguna</p>
+                        <p id="header-user-role" class="text-[10px] md:text-xs font-semibold text-emerald-600">Petugas</p>
+                    </div>
+                    <div class="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold shadow-sm"><i class="fas fa-user"></i></div>
+                </div>
             </header>
 
-            <div class="flex-1 overflow-y-auto relative h-full">
-                <div id="view-dashboard" class="view-section flex-col p-4 md:p-8 relative"></div>
-                
-                <div id="view-scanner" class="view-section hidden h-full flex flex-col p-4 md:p-8 relative justify-center items-center">
-                    <div class="flex justify-center mb-6 w-full max-w-lg">
-                        <div class="bg-slate-200 p-1.5 rounded-2xl flex gap-1 w-full border border-slate-300 shadow-inner">
+            <div class="flex-1 overflow-y-auto bg-slate-50 relative">
+                <div id="view-dashboard" class="view-section hidden flex-col p-4 md:p-8 max-w-7xl mx-auto"></div>
+                <div id="view-scanner" class="view-section hidden min-h-full flex flex-col p-4 md:p-8 relative justify-start items-center">
+                    <div id="scanner-top-bar" class="flex items-center justify-between gap-2 mb-4 w-full max-w-lg">
+                        <div id="scanner-mode-switcher" class="bg-slate-200 p-1.5 rounded-2xl flex gap-1 flex-1 border border-slate-300 shadow-inner">
                             <button onclick="switchView('scanner', 'absensi')" class="flex-1 py-2.5 rounded-xl font-bold transition flex items-center justify-center gap-2 text-sm shadow-sm" id="btn-mode-absen" style="background-color: var(--absen-bg, white); color: var(--absen-text, #059669);">
                                 <i class="fas fa-qrcode"></i> Absensi
                             </button>
@@ -1540,6 +1898,19 @@
                                 <i class="fas fa-book"></i> Buku Saku
                             </button>
                         </div>
+                        <button type="button" id="btn-scanner-fullscreen" onclick="toggleScannerFullscreen()" class="bg-slate-800 hover:bg-slate-700 text-white px-3.5 py-2.5 rounded-xl font-bold text-xs shadow-sm transition flex items-center justify-center gap-1.5 shrink-0" title="Mode Fokus Layar Penuh">
+                            <i class="fas fa-expand"></i> <span>Layar Penuh</span>
+                        </button>
+                    </div>
+
+                    <!-- SAKELAR MODE NORMAL vs MODE GERBANG KILAT -->
+                    <div id="fast-scan-toggle-wrap" class="w-full max-w-lg mb-4 bg-slate-100 p-1.5 rounded-xl border border-slate-200 flex items-center gap-1.5 shadow-sm">
+                        <button type="button" id="btn-speed-normal" onclick="if(appState.fastScanMode) toggleFastScanMode()" class="flex-1 py-2 px-3 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow">
+                            <i class="fas fa-user-check"></i> Mode Normal (3 Detik)
+                        </button>
+                        <button type="button" id="btn-speed-fast" onclick="if(!appState.fastScanMode) toggleFastScanMode()" class="flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-500 hover:bg-white/60">
+                            <i class="fas fa-bolt"></i> Mode Gerbang Kilat (1 Detik)
+                        </button>
                     </div>
                     <style>
                         [data-view="scanner-absensi"].bg-slate-800 ~ main #btn-mode-absen,
@@ -1557,7 +1928,10 @@
                         <p id="scanner-subtitle" class="text-gray-500 font-medium text-sm bg-white inline-block px-4 py-2 rounded-full border shadow-sm"><i class="fas fa-qrcode mr-2 text-emerald-500"></i>Arahkan Kartu QR Siswa ke Kamera / Scanner</p>
                     </div>
                     
-                    <div class="w-full max-w-lg bg-white rounded-3xl shadow-xl border p-4 md:p-6 text-center relative mx-auto">
+                    <div id="scanner-card-box" class="w-full max-w-lg bg-white rounded-3xl shadow-xl border p-4 md:p-6 text-center relative mx-auto">
+                        <!-- NOTIFIKASI CEPAT MODE GERBANG KILAT -->
+                        <div id="fast-scan-banner" class="hidden"></div>
+
                         <div class="relative w-full max-w-[500px] mx-auto bg-slate-100 min-h-[300px] flex items-center justify-center rounded-2xl border-4 border-dashed border-slate-300 overflow-hidden">
                             <div id="camera-wrapper" class="absolute inset-0 w-full h-full hidden relative">
                                 <div id="reader" class="absolute inset-0 w-full h-full" style="box-shadow: none;"></div>
@@ -1574,6 +1948,15 @@
                                 <div class="text-[10px] bg-slate-200 text-slate-500 px-2 py-1 rounded">Bisa pakai Kamera atau Scanner USB</div>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- DAFTAR 5 SISWA TERAKHIR MASUK (MODE GERBANG KILAT) -->
+                    <div id="recent-scans-panel" class="hidden w-full max-w-lg mt-4 mb-8 bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+                        <div class="px-4 py-2.5 bg-slate-800 text-white flex items-center justify-between">
+                            <span class="text-xs font-black uppercase tracking-wider"><i class="fas fa-bolt text-amber-400 mr-1.5"></i> 5 Siswa Terakhir Masuk</span>
+                            <span id="recent-scans-count" class="text-[10px] font-bold bg-white/15 px-2 py-0.5 rounded-full">0 Terbaru</span>
+                        </div>
+                        <div id="recent-scans-list" class="divide-y divide-slate-100"></div>
                     </div>
                 </div>
                 
