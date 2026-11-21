@@ -86,6 +86,99 @@
         window.currentFacingMode = "environment";
         window.currentUploadStudentId = null;
 
+        // ==========================================
+        // PEMBUKA KUNCI SUARA & AUDIO KHUSUS HP (ANDROID / IPHONE)
+        // ==========================================
+        window.cachedVoices = [];
+        window.audioUnlocked = false;
+        window.sharedAudioCtx = null;
+
+        if ('speechSynthesis' in window) {
+            const loadVoices = () => {
+                window.cachedVoices = window.speechSynthesis.getVoices() || [];
+            };
+            loadVoices();
+            window.speechSynthesis.onvoiceschanged = loadVoices;
+        }
+
+        window.unlockMobileAudio = () => {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (AudioCtx) {
+                    if (!window.sharedAudioCtx) window.sharedAudioCtx = new AudioCtx();
+                    if (window.sharedAudioCtx.state === 'suspended') window.sharedAudioCtx.resume();
+                }
+                if ('speechSynthesis' in window && !window.audioUnlocked) {
+                    window.speechSynthesis.cancel();
+                    const silent = new SpeechSynthesisUtterance('');
+                    silent.volume = 0;
+                    silent.lang = 'id-ID';
+                    window.speechSynthesis.speak(silent);
+                    window.audioUnlocked = true;
+                }
+            } catch (e) {
+                console.warn('Audio unlock skipped:', e);
+            }
+        };
+
+        // Ambil nama awal siswa dalam format huruf kapital awal agar tidak dieja per huruf oleh suara browser
+        window.getStudentFirstName = (student) => {
+            if (!student || !student.name) return '';
+            const rawFirst = student.name.trim().split(/\s+/)[0] || '';
+            return rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
+        };
+
+        // ==========================================
+        // SISTEM LEVEL & LENCANA (SINKRON DENGAN PORTAL ORANG TUA)
+        // ==========================================
+        window.getStudentPoints = (studentId) => {
+            let poin = 100;
+            if (appState.bukuSaku && appState.bukuSaku[studentId]) {
+                appState.bukuSaku[studentId].forEach(h => { poin += (parseInt(h.points) || 0); });
+            }
+            return poin;
+        };
+
+        window.getStudentBadge = (poin) => {
+            if (poin >= 150) {
+                return {
+                    tier: 4,
+                    icon: '💎',
+                    label: 'Lencana Berlian 💎',
+                    shortLabel: '💎 Berlian',
+                    pillClass: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+                    overlayClass: 'bg-cyan-500/30 border-cyan-200/60 text-white'
+                };
+            } else if (poin >= 121) {
+                return {
+                    tier: 3,
+                    icon: '🥇',
+                    label: 'Lencana Emas 🥇',
+                    shortLabel: '🥇 Emas',
+                    pillClass: 'bg-amber-100 text-amber-800 border-amber-200',
+                    overlayClass: 'bg-amber-400/30 border-amber-200/70 text-white'
+                };
+            } else if (poin >= 100) {
+                return {
+                    tier: 2,
+                    icon: '🥈',
+                    label: 'Lencana Perak 🥈',
+                    shortLabel: '🥈 Perak',
+                    pillClass: 'bg-slate-100 text-slate-700 border-slate-200',
+                    overlayClass: 'bg-white/20 border-white/40 text-white'
+                };
+            } else {
+                return {
+                    tier: 1,
+                    icon: '⚠️',
+                    label: 'Perlu Bimbingan ⚠️',
+                    shortLabel: '⚠️ Bimbingan',
+                    pillClass: 'bg-rose-100 text-rose-700 border-rose-200',
+                    overlayClass: 'bg-rose-600/40 border-rose-200/60 text-white'
+                };
+            }
+        };
+
         let hardwareScannerBuffer = "";
         let hardwareScannerTimeout = null;
 
@@ -125,10 +218,34 @@
                 if (type === 'mute') return;
                 if (type === 'voice') {
                     if ('speechSynthesis' in window) {
-                        window.speechSynthesis.cancel(); const msg = new SpeechSynthesisUtterance(voiceText); msg.lang = 'id-ID'; window.speechSynthesis.speak(msg); return;
-                    } else { type = voiceText.includes('Berhasil') ? 'chime' : 'error'; }
+                        try {
+                            window.speechSynthesis.cancel();
+                            if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+                            // Jeda 80ms mengatasi bug Chrome Android yang membisukan suara jika cancel & speak bersamaan
+                            setTimeout(() => {
+                                const msg = new SpeechSynthesisUtterance(voiceText);
+                                msg.lang = 'id-ID';
+                                msg.rate = 0.95;
+                                msg.pitch = 1;
+                                msg.volume = 1;
+                                const voices = window.cachedVoices.length ? window.cachedVoices : (window.speechSynthesis.getVoices() || []);
+                                const idVoice = voices.find(v => v.lang && v.lang.toLowerCase().replace('_', '-').startsWith('id'));
+                                if (idVoice) msg.voice = idVoice;
+                                window.speechSynthesis.speak(msg);
+                            }, 80);
+                            return;
+                        } catch (e) {
+                            console.warn('Speech error:', e);
+                            type = voiceText.includes('Berhasil') ? 'chime' : 'error';
+                        }
+                    } else {
+                        type = voiceText.includes('Berhasil') ? 'chime' : 'error';
+                    }
                 }
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                const ctx = window.sharedAudioCtx || new AudioCtx();
+                window.sharedAudioCtx = ctx;
+                if (ctx.state === 'suspended') ctx.resume();
                 const osc = ctx.createOscillator(); const gainNode = ctx.createGain();
                 osc.connect(gainNode); gainNode.connect(ctx.destination);
                 if (type === 'chime') {
@@ -257,6 +374,7 @@
         };
 
         window.doLogin = () => {
+            unlockMobileAudio();
             const userIn = document.getElementById('login-username').value.toLowerCase().trim(); const passIn = document.getElementById('login-password').value.trim();
             let account = appState.teachers.find(t => t.id === userIn);
             if (!account) { UI.toast('Username tidak terdaftar!', 'error'); return; }
@@ -680,7 +798,8 @@
             
             let photoSrc = student.photoUrl || 'https://placehold.co/300x400/ffffff/64748b?text=FOTO+SISWA'; 
 
-            let html = `<div style="width: 297mm; height: 210mm; background: white; padding: 20px; box-sizing: border-box; position: relative;"><div style="width: 100%; height: 100%; border: 8px solid #d4af37; padding: 10px; box-sizing: border-box;"><div style="width: 100%; height: 100%; border: 2px solid #d4af37; padding: 30px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; position: relative; background: radial-gradient(circle, rgba(255,255,255,1) 60%, rgba(253,248,228,0.4) 100%);"><div style="display: flex; justify-content: space-between; width: 100%; position: absolute; top: 30px; padding: 0 40px; box-sizing: border-box;"><img src="${logoManado}" style="width: 100px; height: 100px; object-fit: contain;"><img src="${logoTutWuri}" style="width: 100px; height: 100px; object-fit: contain;"></div><h1 style="font-family: 'Times New Roman', serif; font-size: 42px; color: #1e3a8a; margin: 20px 0 5px 0; font-weight: 900; letter-spacing: 2px; text-transform: uppercase;">PIAGAM PENGHARGAAN</h1><h2 style="font-family: 'Arial', sans-serif; font-size: 20px; color: #4b5563; margin: 0 0 30px 0; font-weight: bold; letter-spacing: 1px;">BINTANG DISIPLIN & KEHADIRAN</h2><p style="font-family: 'Arial', sans-serif; font-size: 16px; color: #374151; margin-bottom: 25px;">Diberikan dengan penuh rasa bangga kepada:</p><div style="display: flex; align-items: center; gap: 30px; margin-bottom: 25px; background: rgba(255,255,255,0.8); padding: 15px 40px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #fde68a;"><img src="${photoSrc}" style="width: 120px; height: 150px; object-fit: contain; border-radius: 10px; border: 3px solid #d4af37;"><div style="text-align: left;"><h1 style="font-family: 'Times New Roman', serif; font-size: 48px; color: #111827; margin: 0 0 5px 0; font-weight: bold; border-bottom: 2px dashed #cbd5e1; padding-bottom: 5px;">${student.name}</h1><p style="font-family: 'Arial', sans-serif; font-size: 18px; color: #4b5563; margin: 5px 0 0 0; font-weight: bold;">NISN: ${student.nis} <span style="margin: 0 15px; color: #9ca3af;">|</span> KELAS: ${student.class}</p></div></div><p style="font-family: 'Arial', sans-serif; font-size: 16px; color: #374151; text-align: center; max-width: 80%; line-height: 1.6;">Atas prestasi gemilangnya dalam menjaga kedisiplinan dengan rekor <b style="color: #047857;">Hadir 100% Tepat Waktu (Tanpa Alpha, Izin, Sakit, & Terlambat)</b> sepanjang bulan <b>${monthName.toUpperCase()}</b>. Semoga menjadi teladan yang baik bagi seluruh siswa ${schoolName}.</p><div style="display: flex; justify-content: space-between; width: 100%; margin-top: auto; padding: 0 50px; box-sizing: border-box;"><div style="text-align: center; font-family: 'Arial', sans-serif;"><p style="margin: 0; font-size: 14px;">Mengetahui,</p><p style="margin: 0; font-size: 14px; margin-bottom: 70px;">Kepala Sekolah</p><p style="margin: 0; font-size: 16px; font-weight: bold; text-decoration: underline;">${namaKepsek}</p><p style="margin: 5px 0 0 0; font-size: 12px;">NIP. ${nipKepsek}</p></div><div style="text-align: center; font-family: 'Arial', sans-serif;"><p style="margin: 0; font-size: 14px;">Manado, ${new Date().getDate()} ${monthName}</p><p style="margin: 0; font-size: 14px; margin-bottom: 70px;">Wali Kelas ${student.class}</p><p style="margin: 0; font-size: 16px; font-weight: bold; text-decoration: underline;">${namaWali}</p><p style="margin: 5px 0 0 0; font-size: 12px;">NIP. ${nipWali}</p></div></div><div style="position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; background: #d4af37; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 4px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.2);"><span style="font-size: 36px; color: white;">🏆</span></div></div></div></div>`;
+            // POSISI FOTO, NAMA, DAN NISN RATA TENGAH (CENTER)
+            let html = `<div style="width: 297mm; height: 210mm; background: white; padding: 18px; box-sizing: border-box; position: relative;"><div style="width: 100%; height: 100%; border: 8px solid #d4af37; padding: 10px; box-sizing: border-box;"><div style="width: 100%; height: 100%; border: 2px solid #d4af37; padding: 24px 30px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; background: radial-gradient(circle, rgba(255,255,255,1) 60%, rgba(253,248,228,0.4) 100%);"><div style="display: flex; justify-content: space-between; width: 100%; position: absolute; top: 24px; padding: 0 36px; box-sizing: border-box;"><img src="${logoManado}" style="width: 95px; height: 95px; object-fit: contain;"><img src="${logoTutWuri}" style="width: 95px; height: 95px; object-fit: contain;"></div><h1 style="font-family: 'Times New Roman', serif; font-size: 40px; color: #1e3a8a; margin: 12px 0 4px 0; font-weight: 900; letter-spacing: 2px; text-transform: uppercase;">PIAGAM PENGHARGAAN</h1><h2 style="font-family: 'Arial', sans-serif; font-size: 18px; color: #4b5563; margin: 0 0 14px 0; font-weight: bold; letter-spacing: 1px;">BINTANG DISIPLIN & KEHADIRAN</h2><p style="font-family: 'Arial', sans-serif; font-size: 15px; color: #374151; margin: 0 0 12px 0;">Diberikan dengan penuh rasa bangga kepada:</p><div style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; margin-bottom: 14px; background: rgba(255,255,255,0.85); padding: 14px 48px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #fde68a; min-width: 65%;"><img src="${photoSrc}" style="width: 92px; height: 112px; object-fit: contain; border-radius: 10px; border: 3px solid #d4af37; margin-bottom: 10px; background: white;"><h1 style="font-family: 'Times New Roman', serif; font-size: 40px; color: #111827; margin: 0 0 6px 0; font-weight: bold; border-bottom: 2px dashed #cbd5e1; padding: 0 20px 5px 20px; text-align: center; line-height: 1.15;">${student.name}</h1><p style="font-family: 'Arial', sans-serif; font-size: 17px; color: #4b5563; margin: 4px 0 0 0; font-weight: bold; text-align: center;">NISN: ${student.nis} <span style="margin: 0 12px; color: #9ca3af;">|</span> KELAS: ${student.class}</p></div><p style="font-family: 'Arial', sans-serif; font-size: 15px; color: #374151; text-align: center; max-width: 82%; line-height: 1.55; margin: 0;">Atas prestasi gemilangnya dalam menjaga kedisiplinan dengan rekor <b style="color: #047857;">Hadir 100% Tepat Waktu (Tanpa Alpha, Izin, Sakit, & Terlambat)</b> sepanjang bulan <b>${monthName.toUpperCase()}</b>. Semoga menjadi teladan yang baik bagi seluruh siswa ${schoolName}.</p><div style="display: flex; justify-content: space-between; width: 100%; margin-top: auto; padding: 0 50px; box-sizing: border-box;"><div style="text-align: center; font-family: 'Arial', sans-serif;"><p style="margin: 0; font-size: 14px;">Mengetahui,</p><p style="margin: 0; font-size: 14px; margin-bottom: 62px;">Kepala Sekolah</p><p style="margin: 0; font-size: 16px; font-weight: bold; text-decoration: underline;">${namaKepsek}</p><p style="margin: 4px 0 0 0; font-size: 12px;">NIP. ${nipKepsek}</p></div><div style="text-align: center; font-family: 'Arial', sans-serif;"><p style="margin: 0; font-size: 14px;">Manado, ${new Date().getDate()} ${monthName}</p><p style="margin: 0; font-size: 14px; margin-bottom: 62px;">Wali Kelas ${student.class}</p><p style="margin: 0; font-size: 16px; font-weight: bold; text-decoration: underline;">${namaWali}</p><p style="margin: 4px 0 0 0; font-size: 12px;">NIP. ${nipWali}</p></div></div><div style="position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); width: 74px; height: 74px; background: #d4af37; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 4px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.2);"><span style="font-size: 32px; color: white;">🏆</span></div></div></div></div>`;
 
             container.innerHTML = html; container.classList.remove('hidden', 'no-print'); container.style.display = 'block';
             let style = document.createElement('style'); style.innerHTML = '@page { size: A4 landscape; margin: 0; }'; document.head.appendChild(style);
@@ -725,7 +844,25 @@
             </div>
 
             <div class="mt-8 pt-6 border-t border-slate-200 mb-10">
-                <div class="mb-4"><h2 class="text-xl font-black text-slate-800 font-russo tracking-wide"><i class="fas fa-book text-blue-500 mr-2"></i> Laporan Buku Saku (Karakter)</h2><p class="text-sm text-gray-500">Tabel perhitungan poin prestasi dan pelanggaran siswa (Default 100 Poin).</p></div>
+                <div class="mb-4"><h2 class="text-xl font-black text-slate-800 font-russo tracking-wide"><i class="fas fa-book text-blue-500 mr-2"></i> Laporan Buku Saku & Lencana Karakter</h2><p class="text-sm text-gray-500">Perhitungan poin & level lencana otomatis sinkron dengan Portal Orang Tua (Default 100 Poin).</p></div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                    <div class="bg-cyan-50 border border-cyan-200 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                        <div><p class="text-[11px] font-bold text-cyan-700 uppercase">Lencana Berlian</p><p class="text-[10px] text-cyan-600 font-semibold">&ge; 150 Poin</p><div id="dash-badge-berlian" class="text-2xl font-black text-cyan-900 mt-1">0</div></div>
+                        <span class="text-3xl">💎</span>
+                    </div>
+                    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                        <div><p class="text-[11px] font-bold text-amber-700 uppercase">Lencana Emas</p><p class="text-[10px] text-amber-600 font-semibold">121 - 149 Poin</p><div id="dash-badge-emas" class="text-2xl font-black text-amber-900 mt-1">0</div></div>
+                        <span class="text-3xl">🥇</span>
+                    </div>
+                    <div class="bg-slate-100 border border-slate-200 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                        <div><p class="text-[11px] font-bold text-slate-600 uppercase">Lencana Perak</p><p class="text-[10px] text-slate-500 font-semibold">100 - 120 Poin</p><div id="dash-badge-perak" class="text-2xl font-black text-slate-800 mt-1">0</div></div>
+                        <span class="text-3xl">🥈</span>
+                    </div>
+                    <div class="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                        <div><p class="text-[11px] font-bold text-rose-700 uppercase">Perlu Bimbingan</p><p class="text-[10px] text-rose-600 font-semibold">&lt; 100 Poin</p><div id="dash-badge-bimbingan" class="text-2xl font-black text-rose-900 mt-1">0</div></div>
+                        <span class="text-3xl">⚠️</span>
+                    </div>
+                </div>
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col h-[350px]">
                         <div class="p-4 bg-blue-50 border-b border-blue-100 flex items-center justify-between"><h3 class="font-bold text-blue-800 uppercase tracking-wide text-sm"><i class="fas fa-star mr-2 text-blue-600"></i> Top 5 Karakter Terbaik</h3></div>
@@ -748,6 +885,7 @@
             let countHadir = 0, countTelat = 0, countSakit = 0, countIzin = 0, countAlpa = 0, belumAbsenList = [];
             
             let characterList = [];
+            let badgeCounts = { berlian: 0, emas: 0, perak: 0, bimbingan: 0 };
 
             targetStds.forEach(s => {
                 if(appState.attendance[todayKey] && appState.attendance[todayKey][s.id]) {
@@ -755,12 +893,19 @@
                     if(stat === 'Hadir') countHadir++; else if(stat === 'Terlambat') countTelat++; else if(stat === 'Sakit') countSakit++; else if(stat === 'Izin') countIzin++; else if(stat === 'Alpa') countAlpa++;
                 } else { belumAbsenList.push({ student: s, status: 'Belum Absen' }); }
                 
-                let poin = 100;
-                if (appState.bukuSaku && appState.bukuSaku[s.id]) {
-                    appState.bukuSaku[s.id].forEach(h => poin += h.points);
-                }
-                characterList.push({ student: s, poin: poin });
+                let poin = getStudentPoints(s.id);
+                let badge = getStudentBadge(poin);
+                if (badge.tier === 4) badgeCounts.berlian++;
+                else if (badge.tier === 3) badgeCounts.emas++;
+                else if (badge.tier === 2) badgeCounts.perak++;
+                else badgeCounts.bimbingan++;
+                characterList.push({ student: s, poin: poin, badge: badge });
             });
+
+            const elBerlian = document.getElementById('dash-badge-berlian'); if(elBerlian) elBerlian.innerText = badgeCounts.berlian;
+            const elEmas = document.getElementById('dash-badge-emas'); if(elEmas) elEmas.innerText = badgeCounts.emas;
+            const elPerak = document.getElementById('dash-badge-perak'); if(elPerak) elPerak.innerText = badgeCounts.perak;
+            const elBimbingan = document.getElementById('dash-badge-bimbingan'); if(elBimbingan) elBimbingan.innerText = badgeCounts.bimbingan;
             
             const totalStds = targetStds.length; let countSIA = countSakit + countIzin + countAlpa; let countBelum = belumAbsenList.length;
             
@@ -784,7 +929,7 @@
             let htmlTop = '';
             characterList.slice(0, 5).forEach(c => {
                 if(c.poin <= 100) return; 
-                htmlTop += `<tr class="hover:bg-blue-50"><td class="p-3 font-bold text-gray-800 text-xs">${c.student.name} <span class="text-[10px] text-gray-400 block">${c.student.class}</span></td><td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-black">⭐ ${c.poin}</span></td></tr>`;
+                htmlTop += `<tr class="hover:bg-blue-50"><td class="p-3 font-bold text-gray-800 text-xs">${c.student.name} <span class="text-[10px] text-gray-400 block">${c.student.class}</span></td><td class="p-3 text-center"><div class="flex flex-col items-center gap-1"><span class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${c.badge.pillClass}">${c.badge.label}</span><span class="bg-blue-100 text-blue-700 px-3 py-0.5 rounded-full text-xs font-black">⭐ ${c.poin}</span></div></td></tr>`;
             });
             if (htmlTop === '') htmlTop = `<tr><td colspan="2" class="p-6 text-center text-gray-400 font-bold bg-slate-50 h-32">Belum ada yang mencetak prestasi poin tambahan.</td></tr>`;
             if (document.getElementById('dash-table-top-karakter')) document.getElementById('dash-table-top-karakter').innerHTML = htmlTop;
@@ -792,7 +937,7 @@
             let htmlBottom = '';
             let bottomKarakter = [...characterList].sort((a, b) => a.poin - b.poin).filter(c => c.poin < 100).slice(0, 5);
             bottomKarakter.forEach(c => {
-                htmlBottom += `<tr class="hover:bg-red-50"><td class="p-3 font-bold text-gray-800 text-xs">${c.student.name} <span class="text-[10px] text-gray-400 block">${c.student.class}</span></td><td class="p-3 text-center"><span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-black">⭐ ${c.poin}</span></td></tr>`;
+                htmlBottom += `<tr class="hover:bg-red-50"><td class="p-3 font-bold text-gray-800 text-xs">${c.student.name} <span class="text-[10px] text-gray-400 block">${c.student.class}</span></td><td class="p-3 text-center"><div class="flex flex-col items-center gap-1"><span class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${c.badge.pillClass}">${c.badge.label}</span><span class="bg-red-100 text-red-700 px-3 py-0.5 rounded-full text-xs font-black">⭐ ${c.poin}</span></div></td></tr>`;
             });
             if (htmlBottom === '') htmlBottom = `<tr><td colspan="2" class="p-6 text-center text-emerald-600 font-bold bg-emerald-50 h-32"><i class="fas fa-check-circle mr-1"></i> Semua siswa berkarakter baik (Poin aman).</td></tr>`;
             if (document.getElementById('dash-table-bottom-karakter')) document.getElementById('dash-table-bottom-karakter').innerHTML = htmlBottom;
@@ -847,6 +992,7 @@
         }
 
         window.startScanner = () => {
+            unlockMobileAudio();
             UI.hide('camera-activate-btn-container'); UI.show('camera-wrapper'); UI.show('scanner-idle'); window.isProcessingScan = false;
             if(!appState.html5QrcodeScanner) { appState.html5QrcodeScanner = new Html5Qrcode("reader"); }
             const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
@@ -869,7 +1015,8 @@
             } else {
                 const userSound = appState.settings.attendance?.scanSound || 'voice'; let tzoffset = (new Date()).getTimezoneOffset() * 60000; const todayKey = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
                 if (appState.attendance && appState.attendance[todayKey] && appState.attendance[todayKey][student.id]) {
-                    const prevData = appState.attendance[todayKey][student.id]; UI.playBeep(userSound === 'voice' ? 'voice' : 'error', 'Sudah Absen'); UI.hide('scanner-idle');
+                    const firstName = getStudentFirstName(student);
+                    const prevData = appState.attendance[todayKey][student.id]; UI.playBeep(userSound === 'voice' ? 'voice' : 'error', `Sudah Absen, ${firstName}`); UI.hide('scanner-idle');
                     const overlay = document.getElementById('scanner-action-overlay'); overlay.innerHTML = `<div class="animate-fade-in bg-blue-500 text-white rounded-3xl p-8 shadow-2xl text-center border-4 border-white w-full max-w-sm flex flex-col items-center justify-center"><i class="fas fa-info-circle text-7xl mb-4 animate-bounce"></i><h3 class="text-2xl font-black mb-2 uppercase tracking-wider">${student.name}</h3><div class="text-3xl font-black font-russo uppercase drop-shadow-md">SUDAH ABSEN</div><p class="text-base font-medium mt-3 opacity-90 mb-4"><i class="fas fa-history mr-1"></i> Tercatat pkl ${prevData.time} WITA</p><button onclick="resumeAfterSave()" class="bg-white text-blue-600 px-6 py-3 rounded-xl font-bold w-full shadow-lg transition transform hover:scale-105 active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan</button></div>`; overlay.style.display = 'flex'; window.lateTimeout = setTimeout(() => { resumeAfterSave(); }, 4000); return; 
                 }
                 let timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -879,17 +1026,16 @@
         };
 
         window.processBukuSaku = (student) => {
-            let poin = 100;
-            if (appState.bukuSaku && appState.bukuSaku[student.id]) {
-                appState.bukuSaku[student.id].forEach(h => poin += h.points);
-            }
+            let poin = getStudentPoints(student.id);
+            let badge = getStudentBadge(poin);
             UI.hide('scanner-idle');
             const overlay = document.getElementById('scanner-action-overlay');
             overlay.innerHTML = `
-                <div class="animate-fade-in bg-white border-4 ${poin < 100 ? 'border-red-400' : 'border-blue-400'} rounded-3xl p-6 shadow-2xl text-center w-full max-w-sm relative flex flex-col items-center">
+                <div class="animate-fade-in bg-white border-4 ${poin < 100 ? 'border-red-400' : (poin >= 150 ? 'border-cyan-400' : (poin >= 121 ? 'border-amber-400' : 'border-blue-400'))} rounded-3xl p-6 shadow-2xl text-center w-full max-w-sm relative flex flex-col items-center">
                     <h3 class="text-xl font-black mb-1 uppercase text-slate-800 tracking-wide">${student.name}</h3>
-                    <div class="text-xs font-bold text-gray-500 mb-4">${student.class}</div>
+                    <div class="text-xs font-bold text-gray-500 mb-3">${student.class}</div>
                     
+                    <span class="px-3.5 py-1 rounded-full text-xs font-black border mb-3 shadow-sm ${badge.pillClass}">${badge.label}</span>
                     <div class="text-6xl font-black font-russo ${poin >= 100 ? 'text-blue-600' : 'text-red-500'} mb-2 drop-shadow-sm">⭐ ${poin}</div>
                     <p class="text-[10px] uppercase font-bold text-gray-400 mb-6 tracking-widest">Total Poin Karakter</p>
                     
@@ -945,11 +1091,18 @@
             const dateKey = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
             const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
+            const oldPoin = getStudentPoints(studentId);
+            const oldBadge = getStudentBadge(oldPoin);
+
             if (!appState.bukuSaku) appState.bukuSaku = {};
             if (!appState.bukuSaku[studentId]) appState.bukuSaku[studentId] = [];
 
             const record = { id: Date.now().toString(), date: dateKey, time: timeStr, type: type, reason: reason, points: points };
             appState.bukuSaku[studentId].push(record);
+
+            const newPoin = getStudentPoints(studentId);
+            const newBadge = getStudentBadge(newPoin);
+            const leveledUp = newBadge.tier > oldBadge.tier;
 
             try {
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sipandai06_bukuSaku', 'data');
@@ -963,11 +1116,15 @@
             else UI.playBeep('error');
 
             overlay.innerHTML = `
-                <div class="animate-fade-in ${type === 'Prestasi' ? 'bg-emerald-500' : 'bg-red-500'} text-white rounded-3xl p-8 shadow-2xl text-center border-4 border-white w-full max-w-sm flex flex-col items-center">
-                    <i class="fas ${type === 'Prestasi' ? 'fa-star' : 'fa-exclamation-triangle'} text-7xl mb-4 animate-bounce"></i>
-                    <h3 class="text-xl font-black mb-2 uppercase tracking-wider">${student.name}</h3>
+                <div class="animate-fade-in ${type === 'Prestasi' ? 'bg-emerald-500' : 'bg-red-500'} text-white rounded-3xl p-7 shadow-2xl text-center border-4 border-white w-full max-w-sm flex flex-col items-center">
+                    ${leveledUp ? `<span class="bg-amber-300 text-amber-950 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider mb-3 animate-bounce shadow">🎉 NAIK LEVEL LENCANA!</span>` : ''}
+                    <i class="fas ${type === 'Prestasi' ? 'fa-star' : 'fa-exclamation-triangle'} text-6xl mb-3 animate-bounce"></i>
+                    <h3 class="text-xl font-black mb-1 uppercase tracking-wider">${student.name}</h3>
                     <div class="text-4xl font-black font-russo uppercase drop-shadow-md mb-2">${points > 0 ? '+' : ''}${points} POIN</div>
-                    <p class="text-sm font-bold opacity-90 mb-6 bg-white/20 px-4 py-2 rounded-lg">${reason}</p>
+                    <p class="text-xs font-bold opacity-95 mb-3 bg-white/20 px-4 py-1.5 rounded-lg">${reason}</p>
+                    <div class="px-4 py-2 rounded-xl border text-xs font-black mb-5 ${newBadge.overlayClass}">
+                        ${newBadge.label} • ⭐ ${newPoin} Poin
+                    </div>
                     <button onclick="resumeAfterSave()" class="bg-white ${type === 'Prestasi' ? 'text-emerald-600' : 'text-red-600'} px-6 py-3 rounded-xl font-bold w-full shadow-lg transition transform hover:scale-105 active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan</button>
                 </div>
             `;
@@ -984,17 +1141,21 @@
                 await setDoc(docRef, { attendance: { [todayKey]: { [student.id]: { status: status, time: timeStr } } } }, { merge: true }); 
             } catch(e) { console.error(e); UI.toast("Gagal menyimpan ke cloud!", "error"); }
             
+            const studentPoin = getStudentPoints(student.id);
+            const studentBadge = getStudentBadge(studentPoin);
+            const firstName = getStudentFirstName(student);
+
             UI.hide('scanner-idle'); const overlay = document.getElementById('scanner-action-overlay');
             if (status === 'Terlambat') {
-                UI.playBeep(userSound === 'voice' ? 'voice' : 'error', 'Siswa Terlambat'); 
+                UI.playBeep(userSound === 'voice' ? 'voice' : 'error', `Siswa Terlambat, ${firstName}`); 
                 let phone = student.parentPhone || ''; if (phone.startsWith('0')) phone = '62' + phone.substring(1);
                 let message = `*PEMBERITAHUAN KEHADIRAN*\n\nYth. Orang Tua/Wali dari *${student.name}*,\n\nKami menginformasikan bahwa ananda telah tiba di sekolah pada pukul *${timeStr} WITA* dengan status kehadiran: *TERLAMBAT*.\n\nMohon bimbingan di rumah agar ananda dapat berangkat lebih awal. Terima kasih.\n\n_Sistem Absensi ${appState.settings.schoolName}_`;
-                let waLink = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : '#'; let waBtnClass = phone ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl' : 'bg-gray-400 text-gray-100 cursor-not-allowed'; let waBtnClick = phone ? `setTimeout(() => { resumeAfterSave(); }, 500);` : `alert('Nomor WA belum diatur!'); return false;`;
-                overlay.innerHTML = `<div class="animate-fade-in bg-yellow-50 border-4 border-yellow-400 rounded-3xl p-6 shadow-2xl text-center w-full max-w-sm relative flex flex-col items-center justify-center"><i class="fas fa-exclamation-triangle text-6xl text-yellow-500 mb-3 animate-bounce"></i><h3 class="text-xl font-black mb-1 uppercase tracking-wider text-yellow-900 leading-tight">${student.name}</h3><div class="text-4xl font-black font-russo uppercase text-yellow-600 mb-2 mt-1 drop-shadow-sm">TERLAMBAT</div><p class="text-sm font-bold text-gray-600 mb-5"><i class="fas fa-clock mr-1"></i> Jam Scan: ${timeStr} WITA</p><div class="flex flex-col gap-3 w-full"><a href="${waLink}" target="${phone ? '_blank' : '_self'}" onclick="${waBtnClick}" class="${waBtnClass} py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition text-sm"><i class="fab fa-whatsapp text-2xl"></i> Kirim WA Orang Tua</a><button onclick="resumeAfterSave()" class="bg-white border-2 border-yellow-400 hover:bg-yellow-100 text-yellow-800 py-3.5 rounded-xl font-bold transition text-sm shadow-sm active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan</button></div></div>`;
+                let waLink = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : '#'; let waBtnClass = phone ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl' : 'bg-gray-400 text-gray-100 cursor-not-allowed'; let waBtnClick = phone ? `setTimeout(() => { resumeAfterSave(); }, 500);` : `UI.toast('Nomor WA belum diatur!', 'error'); return false;`;
+                overlay.innerHTML = `<div class="animate-fade-in bg-yellow-50 border-4 border-yellow-400 rounded-3xl p-6 shadow-2xl text-center w-full max-w-sm relative flex flex-col items-center justify-center"><i class="fas fa-exclamation-triangle text-6xl text-yellow-500 mb-3 animate-bounce"></i><h3 class="text-xl font-black mb-1 uppercase tracking-wider text-yellow-900 leading-tight">${student.name}</h3><span class="px-3 py-1 rounded-full text-[11px] font-black border mb-2 ${studentBadge.pillClass}">${studentBadge.label} • ⭐ ${studentPoin}</span><div class="text-4xl font-black font-russo uppercase text-yellow-600 mb-2 mt-1 drop-shadow-sm">TERLAMBAT</div><p class="text-sm font-bold text-gray-600 mb-5"><i class="fas fa-clock mr-1"></i> Jam Scan: ${timeStr} WITA</p><div class="flex flex-col gap-3 w-full"><a href="${waLink}" target="${phone ? '_blank' : '_self'}" onclick="${waBtnClick}" class="${waBtnClass} py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition text-sm"><i class="fab fa-whatsapp text-2xl"></i> Kirim WA Orang Tua</a><button onclick="resumeAfterSave()" class="bg-white border-2 border-yellow-400 hover:bg-yellow-100 text-yellow-800 py-3.5 rounded-xl font-bold transition text-sm shadow-sm active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan</button></div></div>`;
                 overlay.style.display = 'flex'; window.lateTimeout = setTimeout(() => { resumeAfterSave(); }, 15000);
             } else {
-                UI.playBeep(userSound, 'Absen Berhasil'); 
-                overlay.innerHTML = `<div class="animate-fade-in bg-emerald-500 text-white rounded-3xl p-8 shadow-2xl text-center border-4 border-white w-full max-w-sm flex flex-col items-center justify-center"><i class="fas fa-check-circle text-7xl mb-4 animate-bounce"></i><h3 class="text-2xl font-black mb-2 uppercase tracking-wider">${student.name}</h3><div class="text-5xl font-black font-russo uppercase drop-shadow-md mb-3">HADIR</div><p class="text-base font-medium mt-2 opacity-90 mb-4"><i class="fas fa-clock mr-1"></i> ${timeStr} WITA</p><button onclick="resumeAfterSave()" class="bg-white text-emerald-600 px-6 py-3 rounded-xl font-bold w-full shadow-lg transition transform hover:scale-105 active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan</button></div>`;
+                UI.playBeep(userSound, `Absen Berhasil, ${firstName}`); 
+                overlay.innerHTML = `<div class="animate-fade-in bg-emerald-500 text-white rounded-3xl p-8 shadow-2xl text-center border-4 border-white w-full max-w-sm flex flex-col items-center justify-center"><i class="fas fa-check-circle text-7xl mb-3 animate-bounce"></i><h3 class="text-2xl font-black mb-2 uppercase tracking-wider">${student.name}</h3><div class="px-4 py-1.5 rounded-full border text-xs font-black mb-3 shadow-sm ${studentBadge.overlayClass}">${studentBadge.label} • ⭐ ${studentPoin} Poin</div><div class="text-5xl font-black font-russo uppercase drop-shadow-md mb-2">HADIR</div><p class="text-base font-medium mt-1 opacity-90 mb-4"><i class="fas fa-clock mr-1"></i> ${timeStr} WITA</p><button onclick="resumeAfterSave()" class="bg-white text-emerald-600 px-6 py-3 rounded-xl font-bold w-full shadow-lg transition transform hover:scale-105 active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan</button></div>`;
                 overlay.style.display = 'flex'; window.lateTimeout = setTimeout(() => { resumeAfterSave(); }, 3000);
             }
         };
@@ -1092,6 +1253,7 @@
         };
 
         window.setManual = async (sId, status) => {
+            unlockMobileAudio();
             const dateKey = UI.val('manual-date'); 
             if(!appState.attendance) appState.attendance = {}; 
             if(!appState.attendance[dateKey]) appState.attendance[dateKey] = {};
@@ -1119,8 +1281,8 @@
             
             loadManualTable(); 
             if (status === 'Terlambat' || status === 'Alpa' || status === 'Sakit') {
-                const student = appState.students.find(s => s.id === sId); const userSound = appState.settings.attendance?.scanSound || 'voice'; let voiceAlert = '';
-                if (status === 'Alpa') voiceAlert = 'Siswa Alpa'; else if (status === 'Sakit') voiceAlert = 'Semoga Lekas Sembuh'; else voiceAlert = 'Siswa Terlambat';
+                const student = appState.students.find(s => s.id === sId); const firstName = getStudentFirstName(student); const userSound = appState.settings.attendance?.scanSound || 'voice'; let voiceAlert = '';
+                if (status === 'Alpa') voiceAlert = `Siswa Alpa, ${firstName}`; else if (status === 'Sakit') voiceAlert = `Semoga Lekas Sembuh, ${firstName}`; else voiceAlert = `Siswa Terlambat, ${firstName}`;
                 UI.playBeep(userSound === 'voice' ? 'voice' : 'error', voiceAlert); if (student) showManualWaNotificationModal(student, status, timeStr, dateKey);
             } else { UI.toast('Status diperbarui!'); }
             if (appState.currentView === 'dashboard') initDashboardCharts();
@@ -1189,11 +1351,14 @@
                     let photoHtml = rawUrl 
                         ? `<img src="${safeUrl}" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="window.handleImageError(this, '${rawUrl}')" style="width: 40px; height: 56px; object-fit: cover; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); cursor: pointer; background: transparent;" onclick="triggerPhotoUpload('${s.id}')" title="Ubah Foto">` 
                         : `<div onclick="triggerPhotoUpload('${s.id}')" style="width: 40px; height: 56px; background: #e2e8f0; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #94a3b8; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Unggah Foto"><span class="text-[10px] font-bold">Foto</span></div>`;
+
+                    let sPoin = getStudentPoints(s.id);
+                    let sBadge = getStudentBadge(sPoin);
                     
                     tbody += `<tr class="hover:bg-slate-50 bg-white border-b">
                         <td class="p-3 text-center">${i+1}</td>
                         <td class="p-3 text-center flex justify-center">${photoHtml}</td>
-                        <td class="p-3 font-semibold">${s.name}<br><span class="text-xs text-gray-500 font-mono">NISN: ${s.nis}</span></td>
+                        <td class="p-3 font-semibold">${s.name}<br><span class="text-xs text-gray-500 font-mono">NISN: ${s.nis}</span><div class="mt-1"><span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-black border ${sBadge.pillClass}">${sBadge.shortLabel} • ⭐ ${sPoin}</span></div></td>
                         <td class="p-3 text-center font-bold text-emerald-700 bg-emerald-50">${s.class}</td>
                         <td class="p-3"><div class="flex items-center gap-2"><i class="fab fa-whatsapp text-green-500 text-lg"></i><input type="number" id="phone_${s.id}" class="border rounded p-2 text-sm w-full md:w-48 outline-none focus:border-emerald-500 font-mono" value="${s.parentPhone || ''}" placeholder="Cth: 0812345..."><button onclick="savePhone('${s.id}')" class="bg-slate-200 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 px-3 py-2 rounded font-bold transition shadow-sm"><i class="fas fa-save"></i></button></div></td>
                         <td class="p-3 text-center"><div class="flex flex-col gap-1 items-center"><button onclick="generateSingleQR('${s.id}')" class="bg-slate-800 hover:bg-slate-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-print mr-1"></i> Cetak</button><button onclick="downloadSinglePNG('${s.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-image mr-1"></i> PNG</button></div></td>
@@ -1299,6 +1464,20 @@
             appState.settings.namaKepsek = UI.val('set-nama-kepsek'); appState.settings.nipKepsek = UI.val('set-nip-kepsek');
             let wDays = []; [0,1,2,3,4,5,6].forEach(d => { if(document.getElementById(`day-${d}`).checked) wDays.push(d); }); appState.settings.attendance.workDays = wDays;
             saveDataToCloud('settings'); UI.toast('Pengaturan Tersimpan!');
+        };
+
+        // Fungsi untuk mengetes suara notifikasi di menu Pengaturan
+        window.testSound = () => {
+            unlockMobileAudio();
+            const selectedSound = UI.val('set-sound-scan') || 'voice';
+            if (selectedSound === 'mute') {
+                UI.toast('Mode suara saat ini diatur ke Bisu (Mute).', 'warning');
+                return;
+            }
+            if (selectedSound === 'voice' && !('speechSynthesis' in window)) {
+                UI.toast('Browser ini tidak mendukung suara bicara. Buka aplikasi lewat Google Chrome / Safari.', 'warning');
+            }
+            UI.playBeep(selectedSound, 'Absen Berhasil, Adeeva');
         };
 
         window.onload = () => { initCloudApp(); };
