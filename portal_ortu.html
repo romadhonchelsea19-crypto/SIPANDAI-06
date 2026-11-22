@@ -809,8 +809,8 @@
     </div>
 
     <!-- MODAL AJUKAN IZIN / SAKIT VIA WHATSAPP -->
-    <div id="izin-wa-modal" class="hidden fixed inset-0 z-[260] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-fade-in">
+    <div id="izin-wa-modal" class="hidden fixed inset-0 z-[260] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-fade-in my-auto">
             <div class="flex items-center justify-between mb-4">
                 <div>
                     <h3 class="text-base font-black text-slate-800"><i class="fab fa-whatsapp text-emerald-500 mr-1.5"></i> Ajukan Izin / Sakit</h3>
@@ -823,18 +823,61 @@
             <form onsubmit="event.preventDefault(); sendIzinWA();" class="space-y-3.5">
                 <div class="grid grid-cols-2 gap-2">
                     <label class="cursor-pointer">
-                        <input type="radio" name="izin-type" value="Sakit" checked class="peer hidden">
+                        <input type="radio" name="izin-type" value="Sakit" checked onchange="updateIzinModalUI()" class="peer hidden">
                         <div class="peer-checked:bg-sky-600 peer-checked:text-white peer-checked:border-sky-600 bg-slate-50 text-slate-600 border border-slate-200 rounded-xl py-2.5 text-center text-xs font-black transition">
                             <i class="fas fa-procedures mr-1"></i> SAKIT
                         </div>
                     </label>
                     <label class="cursor-pointer">
-                        <input type="radio" name="izin-type" value="Izin" class="peer hidden">
+                        <input type="radio" name="izin-type" value="Izin" onchange="updateIzinModalUI()" class="peer hidden">
                         <div class="peer-checked:bg-orange-500 peer-checked:text-white peer-checked:border-orange-500 bg-slate-50 text-slate-600 border border-slate-200 rounded-xl py-2.5 text-center text-xs font-black transition">
                             <i class="fas fa-envelope-open-text mr-1"></i> IZIN
                         </div>
                     </label>
                 </div>
+
+                <!-- PILIHAN LAMA SAKIT (KHUSUS SAKIT) -->
+                <div id="sakit-duration-wrap" class="bg-sky-50/80 border border-sky-200 rounded-2xl p-3 space-y-2.5">
+                    <label class="block text-[11px] font-bold text-sky-900 uppercase">Lama Sakit</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="sakit-duration" value="1-2" checked onchange="updateIzinModalUI()" class="peer hidden">
+                            <div class="peer-checked:bg-sky-600 peer-checked:text-white peer-checked:border-sky-600 bg-white text-slate-600 border border-sky-200 rounded-xl py-2 px-2 text-center text-[11px] font-bold transition">
+                                1 – 2 Hari
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="sakit-duration" value="3+" onchange="updateIzinModalUI()" class="peer hidden">
+                            <div class="peer-checked:bg-sky-600 peer-checked:text-white peer-checked:border-sky-600 bg-white text-slate-600 border border-sky-200 rounded-xl py-2 px-2 text-center text-[11px] font-bold transition">
+                                &ge; 3 Hari (Surat)
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- UNGGAH SURAT SAKIT (MUNCUL HANYA JIKA SAKIT >= 3 HARI) -->
+                    <div id="surat-sakit-upload-wrap" class="hidden pt-1 space-y-2">
+                        <p class="text-[11px] text-sky-800 font-semibold leading-snug">
+                            <i class="fas fa-file-medical text-sky-600 mr-1"></i> Sakit 3 hari atau lebih harap lampirkan foto <b>Surat Keterangan Dokter / Surat Sakit</b> (otomatis dikompres ringan).
+                        </p>
+                        <input type="file" id="izin-surat-file" accept="image/*" onchange="handleSuratSakitSelect(event)" class="hidden">
+                        <label for="izin-surat-file" id="izin-surat-dropzone" class="cursor-pointer flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-sky-300 hover:border-sky-500 bg-white rounded-xl p-3 text-center transition">
+                            <i class="fas fa-camera text-xl text-sky-500"></i>
+                            <span class="text-xs font-bold text-sky-800">Pilih / Foto Surat Sakit</span>
+                            <span class="text-[10px] text-slate-400">Otomatis dikompres ringan (&lt; 100 KB)</span>
+                        </label>
+                        <div id="izin-surat-preview-wrap" class="hidden bg-white border border-sky-200 rounded-xl p-2 flex items-center gap-2.5">
+                            <img id="izin-surat-preview-img" src="" alt="Preview Surat Sakit" class="w-12 h-14 object-cover rounded-lg border border-slate-200 shrink-0">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-[11px] font-bold text-emerald-700 truncate"><i class="fas fa-check-circle mr-1"></i> Siap dikirim</p>
+                                <p id="izin-surat-size-info" class="text-[10px] text-slate-500 font-mono">-</p>
+                            </div>
+                            <button type="button" onclick="clearSuratSakit()" class="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center shrink-0" title="Hapus Foto">
+                                <i class="fas fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div>
                     <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Tanggal Tidak Masuk</label>
                     <input type="date" id="izin-date" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold focus:outline-none focus:border-emerald-500">
@@ -844,7 +887,7 @@
                     <textarea id="izin-reason" rows="3" required placeholder="Contoh: Sedang demam dan istirahat di rumah / Ada urusan keluarga."
                         class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-emerald-500"></textarea>
                 </div>
-                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs shadow-md transition active:scale-95 flex items-center justify-center gap-2">
+                <button type="submit" id="btn-submit-izin-wa" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs shadow-md transition active:scale-95 flex items-center justify-center gap-2">
                     <i class="fab fa-whatsapp text-base"></i> KIRIM KE WA WALI KELAS
                 </button>
             </form>
@@ -928,7 +971,9 @@
             chartInstance: null,
             dataLoaded: false,
             selectedScheduleDay: (new Date().getDay() >= 1 && new Date().getDay() <= 5) ? new Date().getDay() : 1,
-            bintangMonthLabel: ''
+            bintangMonthLabel: '',
+            suratSakitBlob: null,
+            suratSakitDataUrl: null
         };
 
         const UNIFORM_SCHEDULE = {
@@ -1741,11 +1786,110 @@
         };
 
         // ==========================================
-        // FITUR AJUKAN IZIN / SAKIT VIA WHATSAPP
+        // FITUR AJUKAN IZIN / SAKIT VIA WHATSAPP + UNGGAH SURAT SAKIT TERKOMPRESI
         // ==========================================
+        function compressSuratSakit(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onerror = () => reject(new Error('Gagal membaca file'));
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onerror = () => reject(new Error('File bukan gambar valid'));
+                    img.onload = () => {
+                        const MAX_DIM = 800;
+                        let w = img.width;
+                        let h = img.height;
+                        if (w > h && w > MAX_DIM) {
+                            h = Math.round((h * MAX_DIM) / w);
+                            w = MAX_DIM;
+                        } else if (h >= w && h > MAX_DIM) {
+                            w = Math.round((w * MAX_DIM) / h);
+                            h = MAX_DIM;
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, w, h);
+                        ctx.drawImage(img, 0, 0, w, h);
+
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+                        canvas.toBlob((blob) => {
+                            resolve({ blob, dataUrl, sizeKB: Math.max(1, Math.round((blob?.size || 0) / 1024)) });
+                        }, 'image/jpeg', 0.65);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        window.clearSuratSakit = () => {
+            portalState.suratSakitBlob = null;
+            portalState.suratSakitDataUrl = null;
+            const fileInput = document.getElementById('izin-surat-file');
+            if (fileInput) fileInput.value = '';
+            document.getElementById('izin-surat-preview-wrap')?.classList.add('hidden');
+            document.getElementById('izin-surat-dropzone')?.classList.remove('hidden');
+        };
+
+        window.updateIzinModalUI = () => {
+            const type = document.querySelector('input[name="izin-type"]:checked')?.value || 'Sakit';
+            const duration = document.querySelector('input[name="sakit-duration"]:checked')?.value || '1-2';
+            const durationWrap = document.getElementById('sakit-duration-wrap');
+            const uploadWrap = document.getElementById('surat-sakit-upload-wrap');
+
+            if (type === 'Sakit') {
+                durationWrap?.classList.remove('hidden');
+                if (duration === '3+') {
+                    uploadWrap?.classList.remove('hidden');
+                } else {
+                    uploadWrap?.classList.add('hidden');
+                    clearSuratSakit();
+                }
+            } else {
+                durationWrap?.classList.add('hidden');
+                uploadWrap?.classList.add('hidden');
+                clearSuratSakit();
+            }
+        };
+
+        window.handleSuratSakitSelect = async (event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            if (!file.type.startsWith('image/')) {
+                showToast("File harus berupa foto / gambar (JPG/PNG).", "error");
+                event.target.value = '';
+                return;
+            }
+            try {
+                const origKB = Math.max(1, Math.round(file.size / 1024));
+                const compressed = await compressSuratSakit(file);
+                portalState.suratSakitBlob = compressed.blob;
+                portalState.suratSakitDataUrl = compressed.dataUrl;
+
+                document.getElementById('izin-surat-preview-img').src = compressed.dataUrl;
+                document.getElementById('izin-surat-size-info').innerText = `${compressed.sizeKB} KB (dikompres dari ${origKB} KB)`;
+                document.getElementById('izin-surat-dropzone').classList.add('hidden');
+                document.getElementById('izin-surat-preview-wrap').classList.remove('hidden');
+                showToast(`Surat sakit berhasil dikompres menjadi ${compressed.sizeKB} KB!`, "success");
+            } catch (err) {
+                console.error(err);
+                showToast("Gagal memproses gambar surat sakit.", "error");
+                clearSuratSakit();
+            }
+        };
+
         window.openIzinModal = () => {
             document.getElementById('izin-date').value = getTodayKey();
             document.getElementById('izin-reason').value = '';
+            const sakitRadio = document.querySelector('input[name="izin-type"][value="Sakit"]');
+            if (sakitRadio) sakitRadio.checked = true;
+            const durShortRadio = document.querySelector('input[name="sakit-duration"][value="1-2"]');
+            if (durShortRadio) durShortRadio.checked = true;
+            clearSuratSakit();
+            updateIzinModalUI();
             document.getElementById('izin-wa-modal').classList.remove('hidden');
         };
 
@@ -1753,7 +1897,7 @@
             document.getElementById('izin-wa-modal').classList.add('hidden');
         };
 
-        window.sendIzinWA = () => {
+        window.sendIzinWA = async () => {
             const student = getActiveStudent();
             if (!student) return;
 
@@ -1765,16 +1909,64 @@
             if (phone.startsWith('0')) phone = '62' + phone.substring(1);
 
             const type = document.querySelector('input[name="izin-type"]:checked')?.value || 'Sakit';
+            const duration = document.querySelector('input[name="sakit-duration"]:checked')?.value || '1-2';
+            const isLongSick = type === 'Sakit' && duration === '3+';
+
+            if (isLongSick && !portalState.suratSakitBlob) {
+                showToast("Untuk sakit 3 hari atau lebih, mohon unggah foto surat sakit terlebih dahulu.", "warning");
+                return;
+            }
+
             const dateVal = document.getElementById('izin-date').value || getTodayKey();
             const reason = document.getElementById('izin-reason').value.trim();
             const [y, m, d] = dateVal.split('-').map(Number);
             const formattedDate = new Date(y, m - 1, d).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
             const schoolName = portalState.settings.schoolName || 'SD NEGERI 06 MANADO';
 
-            const msg = `*PERMOHONAN ${type.toUpperCase()} SISWA*\n\nYth. Bapak/Ibu Wali Kelas *${student.class}*,\n\nDengan hormat, saya selaku Orang Tua/Wali dari:\n• Nama: *${student.name}*\n• NISN: ${student.nis}\n• Kelas: ${student.class}\n\nMemberitahukan bahwa pada *${formattedDate}* ananda tidak dapat mengikuti kegiatan belajar di sekolah karena *${type.toUpperCase()}*.\n• Keterangan: ${reason}\n\nAtas perhatian dan izin Bapak/Ibu, kami ucapkan terima kasih.\n\n_Dikirim melalui Portal Orang Tua ${schoolName}_`;
+            let suratUrl = '';
+            const submitBtn = document.getElementById('btn-submit-izin-wa');
+            const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+
+            if (isLongSick && portalState.suratSakitBlob) {
+                const imgbbKey = portalState.settings?.imgbbApiKey || '';
+                if (imgbbKey) {
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mengunggah Surat Sakit...';
+                    }
+                    try {
+                        const formData = new FormData();
+                        formData.append('image', portalState.suratSakitBlob, `surat_sakit_${student.nis || student.id}.jpg`);
+                        const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, { method: 'POST', body: formData });
+                        const data = await res.json();
+                        if (data.success && data.data?.url) {
+                            suratUrl = data.data.url;
+                        }
+                    } catch (err) {
+                        console.warn('Upload surat sakit ImgBB gagal:', err);
+                    } finally {
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = originalBtnHtml;
+                        }
+                    }
+                }
+            }
+
+            let extraSickInfo = '';
+            if (type === 'Sakit') {
+                extraSickInfo = `\n- Lama Sakit: ${isLongSick ? '3 Hari atau Lebih' : '1 - 2 Hari'}`;
+                if (isLongSick) {
+                    extraSickInfo += suratUrl
+                        ? `\n- Lampiran Surat Sakit: ${suratUrl}`
+                        : `\n- Lampiran Surat Sakit: (Foto surat sakit dilampirkan menyusul di chat WA ini)`;
+                }
+            }
+
+            const msg = `*PERMOHONAN ${type.toUpperCase()} SISWA*\n\nYth. Bapak/Ibu Wali Kelas *${student.class}*,\n\nDengan hormat, saya selaku Orang Tua/Wali dari:\n- Nama: *${student.name}*\n- NISN: ${student.nis}\n- Kelas: ${student.class}\n\nMemberitahukan bahwa pada *${formattedDate}* ananda tidak dapat mengikuti kegiatan belajar di sekolah karena *${type.toUpperCase()}*.${extraSickInfo}\n- Keterangan: ${reason}\n\nAtas perhatian dan izin Bapak/Ibu, kami ucapkan terima kasih.\n\n_Dikirim melalui Portal Orang Tua ${schoolName}_`;
 
             closeIzinModal();
-            window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+            window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`, '_blank');
         };
 
         // ==========================================
