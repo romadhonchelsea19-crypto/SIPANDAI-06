@@ -1380,6 +1380,7 @@
                 reasons.forEach(item => {
                     buttonsHtml += `<button onclick="saveBukuSaku('${studentId}', 'Prestasi', '${item.r}', ${item.p})" class="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 py-3 px-4 rounded-lg font-bold text-sm text-left flex justify-between items-center shadow-sm transition active:scale-95"><span>${item.r}</span> <span class="bg-emerald-500 text-white px-2 py-1 rounded text-xs">+${item.p} Poin</span></button>`;
                 });
+                buttonsHtml += `<button onclick="showCustomBukuSakuForm('${studentId}', 'prestasi')" class="bg-white hover:bg-emerald-50 border-2 border-dashed border-emerald-400 text-emerald-700 py-3 px-4 rounded-lg font-black text-sm text-left flex justify-between items-center shadow-sm transition active:scale-95"><span><i class="fas fa-pen mr-2"></i> Lainnya (Ketik Sendiri)</span> <span class="bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-xs">Bebas</span></button>`;
             } else {
                 const reasons = [
                     {r: 'Membuang Sampah Sembarangan', p: -5},
@@ -1390,18 +1391,83 @@
                 reasons.forEach(item => {
                     buttonsHtml += `<button onclick="saveBukuSaku('${studentId}', 'Pelanggaran', '${item.r}', ${item.p})" class="bg-red-50 hover:bg-red-100 border border-red-200 text-red-800 py-3 px-4 rounded-lg font-bold text-sm text-left flex justify-between items-center shadow-sm transition active:scale-95"><span>${item.r}</span> <span class="bg-red-500 text-white px-2 py-1 rounded text-xs">${item.p} Poin</span></button>`;
                 });
+                buttonsHtml += `<button onclick="showCustomBukuSakuForm('${studentId}', 'pelanggaran')" class="bg-white hover:bg-red-50 border-2 border-dashed border-red-400 text-red-700 py-3 px-4 rounded-lg font-black text-sm text-left flex justify-between items-center shadow-sm transition active:scale-95"><span><i class="fas fa-pen mr-2"></i> Lainnya (Ketik Sendiri)</span> <span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs">Bebas</span></button>`;
             }
 
             overlay.innerHTML = `
-                <div class="animate-fade-in bg-white border-4 ${type === 'prestasi' ? 'border-emerald-400' : 'border-red-400'} rounded-3xl p-6 shadow-2xl w-full max-w-sm relative">
+                <div class="animate-fade-in bg-white border-4 ${type === 'prestasi' ? 'border-emerald-400' : 'border-red-400'} rounded-3xl p-6 shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto relative">
                     <h3 class="text-lg font-black mb-1 text-center uppercase ${type === 'prestasi' ? 'text-emerald-700' : 'text-red-700'}">Pilih ${type}</h3>
-                    <p class="text-center text-xs font-bold text-gray-500 mb-5">Ketuk alasan di bawah ini:</p>
+                    <p class="text-center text-xs font-bold text-gray-500 mb-4">Ketuk alasan di bawah ini:</p>
                     <div class="flex flex-col gap-2.5 mb-5">
                         ${buttonsHtml}
                     </div>
                     <button onclick="processBukuSaku(appState.students.find(s=>s.id==='${studentId}'))" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl font-bold text-sm transition"><i class="fas fa-arrow-left mr-2"></i> Kembali</button>
                 </div>
             `;
+        };
+
+        window.showCustomBukuSakuForm = (studentId, type) => {
+            const isPrestasi = type === 'prestasi';
+            const overlay = document.getElementById('scanner-action-overlay');
+            const placeholderText = isPrestasi
+                ? 'Cth: Juara lomba, Membantu merapikan kelas...'
+                : 'Cth: Tidak membawa buku, Mengganggu teman...';
+
+            overlay.innerHTML = `
+                <div class="animate-fade-in bg-white border-4 ${isPrestasi ? 'border-emerald-400' : 'border-red-400'} rounded-3xl p-6 shadow-2xl w-full max-w-sm relative text-left">
+                    <h3 class="text-lg font-black mb-1 text-center uppercase ${isPrestasi ? 'text-emerald-700' : 'text-red-700'}">
+                        <i class="fas fa-pen mr-1.5"></i> ${isPrestasi ? 'Prestasi Lainnya' : 'Pelanggaran Lainnya'}
+                    </h3>
+                    <p class="text-center text-xs font-bold text-gray-500 mb-4">Ketik keterangan & jumlah poin secara manual:</p>
+                    <form onsubmit="event.preventDefault(); submitCustomBukuSaku('${studentId}', '${type}');" class="space-y-3.5">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Keterangan / Alasan</label>
+                            <input type="text" id="custom-bs-reason" required maxlength="100" placeholder="${placeholderText}"
+                                class="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 focus:border-${isPrestasi ? 'emerald' : 'red'}-500 outline-none text-sm font-semibold text-slate-800">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Jumlah Poin (${isPrestasi ? 'Ditambah' : 'Dikurangi'})</label>
+                            <div class="flex items-center gap-2">
+                                <span class="px-3.5 py-2.5 rounded-xl font-black text-base ${isPrestasi ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}">${isPrestasi ? '+' : '-'}</span>
+                                <input type="number" id="custom-bs-points" required min="1" max="100" value="5"
+                                    class="flex-1 px-3.5 py-2.5 rounded-xl border-2 border-slate-200 focus:border-${isPrestasi ? 'emerald' : 'red'}-500 outline-none text-base font-black text-slate-800 font-mono">
+                                <span class="text-xs font-bold text-slate-500">Poin</span>
+                            </div>
+                        </div>
+                        <div class="flex flex-col gap-2 pt-2">
+                            <button type="submit" class="w-full ${isPrestasi ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'} text-white py-3 rounded-xl font-bold text-sm shadow-md transition active:scale-95">
+                                <i class="fas fa-save mr-1.5"></i> Simpan Poin
+                            </button>
+                            <button type="button" onclick="showBukuSakuReason('${studentId}', '${type}')" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl font-bold text-sm transition">
+                                <i class="fas fa-arrow-left mr-1.5"></i> Kembali
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            setTimeout(() => { document.getElementById('custom-bs-reason')?.focus(); }, 100);
+        };
+
+        window.submitCustomBukuSaku = (studentId, type) => {
+            const reasonEl = document.getElementById('custom-bs-reason');
+            const pointsEl = document.getElementById('custom-bs-points');
+            const reason = (reasonEl?.value || '').trim();
+            const rawPoints = parseInt(pointsEl?.value, 10);
+
+            if (!reason) {
+                UI.toast('Mohon ketik keterangan terlebih dahulu!', 'error');
+                reasonEl?.focus();
+                return;
+            }
+            if (isNaN(rawPoints) || rawPoints <= 0) {
+                UI.toast('Jumlah poin harus berupa angka lebih dari 0!', 'error');
+                pointsEl?.focus();
+                return;
+            }
+
+            const isPrestasi = type === 'prestasi';
+            const finalPoints = isPrestasi ? Math.abs(rawPoints) : -Math.abs(rawPoints);
+            saveBukuSaku(studentId, isPrestasi ? 'Prestasi' : 'Pelanggaran', reason, finalPoints);
         };
 
         window.saveBukuSaku = async (studentId, type, reason, points) => {
