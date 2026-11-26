@@ -833,13 +833,213 @@
             
             let photoSrc = student.photoUrl || 'https://placehold.co/300x400/ffffff/64748b?text=FOTO+SISWA'; 
 
-            // POSISI FOTO, NAMA, DAN NISN RATA TENGAH (CENTER)
-            let html = `<div style="width: 297mm; height: 210mm; background: white; padding: 18px; box-sizing: border-box; position: relative;"><div style="width: 100%; height: 100%; border: 8px solid #d4af37; padding: 10px; box-sizing: border-box;"><div style="width: 100%; height: 100%; border: 2px solid #d4af37; padding: 24px 30px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; background: radial-gradient(circle, rgba(255,255,255,1) 60%, rgba(253,248,228,0.4) 100%);"><div style="display: flex; justify-content: space-between; width: 100%; position: absolute; top: 24px; padding: 0 36px; box-sizing: border-box;"><img src="${logoManado}" style="width: 95px; height: 95px; object-fit: contain;"><img src="${logoTutWuri}" style="width: 95px; height: 95px; object-fit: contain;"></div><h1 style="font-family: 'Times New Roman', serif; font-size: 40px; color: #1e3a8a; margin: 12px 0 4px 0; font-weight: 900; letter-spacing: 2px; text-transform: uppercase;">PIAGAM PENGHARGAAN</h1><h2 style="font-family: 'Arial', sans-serif; font-size: 18px; color: #4b5563; margin: 0 0 14px 0; font-weight: bold; letter-spacing: 1px;">BINTANG DISIPLIN & KEHADIRAN</h2><p style="font-family: 'Arial', sans-serif; font-size: 15px; color: #374151; margin: 0 0 12px 0;">Diberikan dengan penuh rasa bangga kepada:</p><div style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; margin-bottom: 14px; background: rgba(255,255,255,0.85); padding: 14px 48px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #fde68a; min-width: 65%;"><img src="${photoSrc}" style="width: 92px; height: 112px; object-fit: contain; border-radius: 10px; border: 3px solid #d4af37; margin-bottom: 10px; background: white;"><h1 style="font-family: 'Times New Roman', serif; font-size: 40px; color: #111827; margin: 0 0 6px 0; font-weight: bold; border-bottom: 2px dashed #cbd5e1; padding: 0 20px 5px 20px; text-align: center; line-height: 1.15;">${student.name}</h1><p style="font-family: 'Arial', sans-serif; font-size: 17px; color: #4b5563; margin: 4px 0 0 0; font-weight: bold; text-align: center;">NISN: ${student.nis} <span style="margin: 0 12px; color: #9ca3af;">|</span> KELAS: ${student.class}</p></div><p style="font-family: 'Arial', sans-serif; font-size: 15px; color: #374151; text-align: center; max-width: 82%; line-height: 1.55; margin: 0;">Atas prestasi gemilangnya dalam menjaga kedisiplinan dengan rekor <b style="color: #047857;">Hadir 100% Tepat Waktu (Tanpa Alpha, Izin, Sakit, & Terlambat)</b> sepanjang bulan <b>${monthName.toUpperCase()}</b>. Semoga menjadi teladan yang baik bagi seluruh siswa ${schoolName}.</p><div style="display: flex; justify-content: space-between; width: 100%; margin-top: auto; padding: 0 50px; box-sizing: border-box;"><div style="text-align: center; font-family: 'Arial', sans-serif;"><p style="margin: 0; font-size: 14px;">Mengetahui,</p><p style="margin: 0; font-size: 14px; margin-bottom: 62px;">Kepala Sekolah</p><p style="margin: 0; font-size: 16px; font-weight: bold; text-decoration: underline;">${namaKepsek}</p><p style="margin: 4px 0 0 0; font-size: 12px;">NIP. ${nipKepsek}</p></div><div style="text-align: center; font-family: 'Arial', sans-serif;"><p style="margin: 0; font-size: 14px;">Manado, ${new Date().getDate()} ${monthName}</p><p style="margin: 0; font-size: 14px; margin-bottom: 62px;">Wali Kelas ${student.class}</p><p style="margin: 0; font-size: 16px; font-weight: bold; text-decoration: underline;">${namaWali}</p><p style="margin: 4px 0 0 0; font-size: 12px;">NIP. ${nipWali}</p></div></div><div style="position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); width: 74px; height: 74px; background: #d4af37; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 4px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.2);"><span style="font-size: 32px; color: white;">🏆</span></div></div></div></div>`;
+            // POSISI FOTO, NAMA, DAN NISN RATA TENGAH (CENTER) | LOGO KIRI: TUT WURI, KANAN: KOTA MANADO
+            let html = `<div style="width: 297mm; height: 210mm; background: white; padding: 18px; box-sizing: border-box; position: relative;"><div style="width: 100%; height: 100%; border: 8px solid #d4af37; padding: 10px; box-sizing: border-box;"><div style="width: 100%; height: 100%; border: 2px solid #d4af37; padding: 24px 30px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; background: radial-gradient(circle, rgba(255,255,255,1) 60%, rgba(253,248,228,0.4) 100%);"><div style="display: flex; justify-content: space-between; width: 100%; position: absolute; top: 24px; padding: 0 36px; box-sizing: border-box;"><img src="${logoTutWuri}" style="width: 95px; height: 95px; object-fit: contain;"><img src="${logoManado}" style="width: 95px; height: 95px; object-fit: contain;"></div><h1 style="font-family: 'Times New Roman', serif; font-size: 40px; color: #1e3a8a; margin: 12px 0 4px 0; font-weight: 900; letter-spacing: 2px; text-transform: uppercase;">PIAGAM PENGHARGAAN</h1><h2 style="font-family: 'Arial', sans-serif; font-size: 18px; color: #4b5563; margin: 0 0 14px 0; font-weight: bold; letter-spacing: 1px;">BINTANG DISIPLIN & KEHADIRAN</h2><p style="font-family: 'Arial', sans-serif; font-size: 15px; color: #374151; margin: 0 0 12px 0;">Diberikan dengan penuh rasa bangga kepada:</p><div style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; margin-bottom: 14px; background: rgba(255,255,255,0.85); padding: 14px 48px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #fde68a; min-width: 65%;"><img src="${photoSrc}" style="width: 92px; height: 112px; object-fit: contain; border-radius: 10px; border: 3px solid #d4af37; margin-bottom: 10px; background: white;"><h1 style="font-family: 'Times New Roman', serif; font-size: 40px; color: #111827; margin: 0 0 6px 0; font-weight: bold; border-bottom: 2px dashed #cbd5e1; padding: 0 20px 5px 20px; text-align: center; line-height: 1.15;">${student.name}</h1><p style="font-family: 'Arial', sans-serif; font-size: 17px; color: #4b5563; margin: 4px 0 0 0; font-weight: bold; text-align: center;">NISN: ${student.nis} <span style="margin: 0 12px; color: #9ca3af;">|</span> KELAS: ${student.class}</p></div><p style="font-family: 'Arial', sans-serif; font-size: 15px; color: #374151; text-align: center; max-width: 82%; line-height: 1.55; margin: 0;">Atas prestasi gemilangnya dalam menjaga kedisiplinan dengan rekor <b style="color: #047857;">Hadir 100% Tepat Waktu (Tanpa Alpha, Izin, Sakit, & Terlambat)</b> sepanjang bulan <b>${monthName.toUpperCase()}</b>. Semoga menjadi teladan yang baik bagi seluruh siswa ${schoolName}.</p><div style="display: flex; justify-content: space-between; width: 100%; margin-top: auto; padding: 0 50px; box-sizing: border-box;"><div style="text-align: center; font-family: 'Arial', sans-serif;"><p style="margin: 0; font-size: 14px;">Mengetahui,</p><p style="margin: 0; font-size: 14px; margin-bottom: 62px;">Kepala Sekolah</p><p style="margin: 0; font-size: 16px; font-weight: bold; text-decoration: underline;">${namaKepsek}</p><p style="margin: 4px 0 0 0; font-size: 12px;">NIP. ${nipKepsek}</p></div><div style="text-align: center; font-family: 'Arial', sans-serif;"><p style="margin: 0; font-size: 14px;">Manado, ${new Date().getDate()} ${monthName}</p><p style="margin: 0; font-size: 14px; margin-bottom: 62px;">Wali Kelas ${student.class}</p><p style="margin: 0; font-size: 16px; font-weight: bold; text-decoration: underline;">${namaWali}</p><p style="margin: 4px 0 0 0; font-size: 12px;">NIP. ${nipWali}</p></div></div><div style="position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); width: 74px; height: 74px; background: #d4af37; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 4px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.2);"><span style="font-size: 32px; color: white;">🏆</span></div></div></div></div>`;
 
             container.innerHTML = html; container.classList.remove('hidden', 'no-print'); container.style.display = 'block';
             let style = document.createElement('style'); style.innerHTML = '@page { size: A4 landscape; margin: 0; }'; document.head.appendChild(style);
             window.onafterprint = () => { container.classList.add('hidden', 'no-print'); container.style.display = 'none'; container.innerHTML = ''; document.head.removeChild(style); window.onafterprint = null; };
             setTimeout(() => { window.print(); }, 1500);
+        };
+
+        // ==========================================
+        // HELPER PEMUAT LOGO AMAN CORS UNTUK CANVAS PIAGAM
+        // ==========================================
+        const loadLogoForCanvas = (rawUrl) => {
+            return new Promise((resolve) => {
+                if (!rawUrl || typeof rawUrl !== 'string') return resolve(null);
+                const tryLoad = (src, fallbackSrc = null) => {
+                    const img = new Image();
+                    let settled = false;
+                    const done = (val) => { if (!settled) { settled = true; resolve(val); } };
+                    const timer = setTimeout(() => {
+                        if (!settled) {
+                            if (fallbackSrc) tryLoad(fallbackSrc, null);
+                            else done(null);
+                        }
+                    }, 6000);
+                    img.crossOrigin = 'anonymous';
+                    img.onload = () => { clearTimeout(timer); done(img); };
+                    img.onerror = () => {
+                        clearTimeout(timer);
+                        if (fallbackSrc) tryLoad(fallbackSrc, null);
+                        else done(null);
+                    };
+                    img.src = src;
+                };
+                if (rawUrl.startsWith('data:')) {
+                    tryLoad(rawUrl, null);
+                } else if (rawUrl.startsWith('http')) {
+                    const proxyUrl = `https://wsrv.nl/?url=${rawUrl.replace(/^https?:\/\//, '')}&output=png`;
+                    if (rawUrl.includes('upload.wikimedia.org')) tryLoad(rawUrl, proxyUrl);
+                    else tryLoad(proxyUrl, rawUrl);
+                } else {
+                    resolve(null);
+                }
+            });
+        };
+
+        const drawLogoInBox = (ctx, img, x, y, boxW, boxH) => {
+            if (!img || !img.width || !img.height) return;
+            const ratio = Math.min(boxW / img.width, boxH / img.height);
+            const w = img.width * ratio;
+            const h = img.height * ratio;
+            ctx.drawImage(img, x + (boxW - w) / 2, y + (boxH - h) / 2, w, h);
+        };
+
+        // ==========================================
+        // UNDUH PIAGAM LENCANA BERLIAN (POIN >= 150)
+        // ==========================================
+        window.unduhPiagamBerlian = async (studentId) => {
+            const student = appState.students.find(s => s.id === studentId);
+            if (!student) return;
+
+            const poin = getStudentPoints(studentId);
+            if (poin < 150) {
+                UI.toast('Piagam Berlian hanya untuk siswa dengan poin minimal 150!', 'warning');
+                return;
+            }
+
+            UI.toast('Menyiapkan Piagam Lencana Berlian...', 'success');
+
+            const schoolName = (appState.settings.schoolName || 'SD NEGERI 06 MANADO').toUpperCase();
+            const namaKepsek = appState.settings.namaKepsek || 'Kepala Sekolah';
+            const nipKepsek = appState.settings.nipKepsek || '-';
+            const waliObj = (appState.teachers || []).find(t => t.role === 'Wali Kelas' && t.assignedClass === student.class);
+            const namaWali = waliObj ? waliObj.name : (appState.user?.role === 'Wali Kelas' ? appState.user.name : `Wali Kelas ${student.class}`);
+            const nipWali = waliObj?.nip || (appState.user?.role === 'Wali Kelas' && appState.user.nip ? appState.user.nip : '-');
+            const todayFormatted = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+            // Ambil logo otomatis dari Cloud E-Rapot/Pengaturan: Kiri Tut Wuri, Kanan Kota Manado
+            const defaultTutWuri = 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg/512px-Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg.png';
+            const defaultManado = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Lambang_Kota_Manado.svg/512px-Lambang_Kota_Manado.svg.png';
+            const rawTutWuri = appState.settings.kopLogoKanan || defaultTutWuri;
+            const rawManado = appState.settings.kopLogoKiri || defaultManado;
+
+            const [imgTutWuri, imgManado] = await Promise.all([
+                loadLogoForCanvas(rawTutWuri).then(img => img || loadLogoForCanvas(defaultTutWuri)),
+                loadLogoForCanvas(rawManado).then(img => img || loadLogoForCanvas(defaultManado))
+            ]);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 1400;
+            canvas.height = 990;
+            const ctx = canvas.getContext('2d');
+
+            // Latar belakang gradien biru berlian elegan
+            const grad = ctx.createRadialGradient(700, 495, 100, 700, 495, 820);
+            grad.addColorStop(0, '#ffffff');
+            grad.addColorStop(1, '#e0f2fe');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 1400, 990);
+
+            // Bingkai ganda Safir & Cyan Berlian
+            ctx.strokeStyle = '#0369a1';
+            ctx.lineWidth = 18;
+            ctx.strokeRect(36, 36, 1328, 918);
+
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(60, 60, 1280, 870);
+
+            // Ornamen sudut
+            ctx.fillStyle = '#0284c7';
+            [[36, 36], [1334, 36], [36, 924], [1334, 924]].forEach(([x, y]) => ctx.fillRect(x, y, 30, 30));
+
+            // Logo Kiri (Tut Wuri Handayani) & Logo Kanan (Kota Manado)
+            drawLogoInBox(ctx, imgTutWuri, 105, 92, 130, 130);
+            drawLogoInBox(ctx, imgManado, 1165, 92, 130, 130);
+
+            // Header Piagam
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 26px Inter, Arial, sans-serif';
+            ctx.fillText(schoolName, 700, 135);
+
+            ctx.fillStyle = '#0c4a6e';
+            ctx.font = '900 62px Georgia, serif';
+            ctx.fillText('PIAGAM PENGHARGAAN', 700, 215);
+
+            ctx.fillStyle = '#0284c7';
+            ctx.font = 'bold 24px Inter, Arial, sans-serif';
+            ctx.fillText('SISWA TELADAN KARAKTER • LENCANA BERLIAN', 700, 260);
+
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(390, 285);
+            ctx.lineTo(1010, 285);
+            ctx.stroke();
+
+            // Identitas Penerima
+            ctx.fillStyle = '#475569';
+            ctx.font = 'italic 24px Georgia, serif';
+            ctx.fillText('Diberikan dengan penuh rasa bangga kepada:', 700, 345);
+
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 54px Georgia, serif';
+            ctx.fillText((student.name || '').toUpperCase(), 700, 425);
+
+            ctx.strokeStyle = '#bae6fd';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(320, 448);
+            ctx.lineTo(1080, 448);
+            ctx.stroke();
+
+            ctx.fillStyle = '#334155';
+            ctx.font = 'bold 22px Inter, Arial, sans-serif';
+            ctx.fillText(`NISN: ${student.nis}   |   KELAS: ${student.class}`, 700, 488);
+
+            // Kalimat Apresiasi
+            ctx.fillStyle = '#334155';
+            ctx.font = '23px Inter, Arial, sans-serif';
+            ctx.fillText('Atas prestasi luar biasa dalam menunjukkan sikap teladan, kejujuran, dan kedisiplinan', 700, 558);
+
+            ctx.fillStyle = '#0369a1';
+            ctx.font = 'bold 26px Inter, Arial, sans-serif';
+            ctx.fillText(`PERAIH LENCANA BERLIAN (${poin} POIN BUKU SAKU DIGITAL)`, 700, 598);
+
+            ctx.fillStyle = '#334155';
+            ctx.font = '22px Inter, Arial, sans-serif';
+            ctx.fillText(`Semoga terus menjadi inspirasi dan kebanggaan bagi seluruh warga ${schoolName}.`, 700, 638);
+
+            // Tanda Tangan Kepala Sekolah & Wali Kelas
+            ctx.fillStyle = '#1e293b';
+            ctx.font = '20px Inter, Arial, sans-serif';
+            ctx.fillText('Mengetahui,', 320, 735);
+            ctx.fillText('Kepala Sekolah', 320, 765);
+            ctx.font = 'bold 21px Inter, Arial, sans-serif';
+            ctx.fillText(namaKepsek, 320, 865);
+            ctx.font = '17px Inter, Arial, sans-serif';
+            ctx.fillText(`NIP. ${nipKepsek}`, 320, 895);
+
+            ctx.font = '20px Inter, Arial, sans-serif';
+            ctx.fillText(`Manado, ${todayFormatted}`, 1080, 735);
+            ctx.fillText(`Wali Kelas ${student.class}`, 1080, 765);
+            ctx.font = 'bold 21px Inter, Arial, sans-serif';
+            ctx.fillText(namaWali, 1080, 865);
+            ctx.font = '17px Inter, Arial, sans-serif';
+            ctx.fillText(`NIP. ${nipWali}`, 1080, 895);
+
+            // Segel Berlian di Tengah Bawah
+            ctx.beginPath();
+            ctx.arc(700, 815, 58, 0, Math.PI * 2);
+            ctx.fillStyle = '#0284c7';
+            ctx.fill();
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = '#bae6fd';
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '48px Arial, sans-serif';
+            ctx.fillText('💎', 700, 833);
+
+            const link = document.createElement('a');
+            link.download = `Piagam_Lencana_Berlian_${(student.name || 'Siswa').replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            UI.toast('Piagam Lencana Berlian berhasil diunduh!', 'success');
         };
 
         function renderDashboard() {
@@ -968,7 +1168,10 @@
             let htmlTop = '';
             characterList.slice(0, 5).forEach(c => {
                 if(c.poin <= 100) return; 
-                htmlTop += `<tr class="hover:bg-blue-50"><td class="p-3 font-bold text-gray-800 text-xs">${c.student.name} <span class="text-[10px] text-gray-400 block">${c.student.class}</span></td><td class="p-3 text-center"><div class="flex flex-col items-center gap-1"><span class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${c.badge.pillClass}">${c.badge.label}</span><span class="bg-blue-100 text-blue-700 px-3 py-0.5 rounded-full text-xs font-black">⭐ ${c.poin}</span></div></td></tr>`;
+                const berlianBtn = c.poin >= 150
+                    ? `<button onclick="unduhPiagamBerlian('${c.student.id}')" class="mt-1 bg-cyan-600 hover:bg-cyan-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold shadow-sm transition inline-flex items-center gap-1"><i class="fas fa-download"></i> Unduh Piagam</button>`
+                    : '';
+                htmlTop += `<tr class="hover:bg-blue-50"><td class="p-3 font-bold text-gray-800 text-xs">${c.student.name} <span class="text-[10px] text-gray-400 block">${c.student.class}</span></td><td class="p-3 text-center"><div class="flex flex-col items-center gap-1"><span class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${c.badge.pillClass}">${c.badge.label}</span><span class="bg-blue-100 text-blue-700 px-3 py-0.5 rounded-full text-xs font-black">⭐ ${c.poin}</span>${berlianBtn}</div></td></tr>`;
             });
             if (htmlTop === '') htmlTop = `<tr><td colspan="2" class="p-6 text-center text-gray-400 font-bold bg-slate-50 h-32">Belum ada yang mencetak prestasi poin tambahan.</td></tr>`;
             if (document.getElementById('dash-table-top-karakter')) document.getElementById('dash-table-top-karakter').innerHTML = htmlTop;
@@ -1360,6 +1563,7 @@
                     <div class="flex flex-col gap-3 w-full">
                         <button onclick="showBukuSakuReason('${student.id}', 'prestasi')" class="bg-emerald-500 hover:bg-emerald-600 text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 text-sm shadow-md transition active:scale-95"><i class="fas fa-plus-circle text-xl"></i> TAMBAH POIN (PRESTASI)</button>
                         <button onclick="showBukuSakuReason('${student.id}', 'pelanggaran')" class="bg-red-500 hover:bg-red-600 text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 text-sm shadow-md transition active:scale-95"><i class="fas fa-minus-circle text-xl"></i> KURANGI POIN (PELANGGARAN)</button>
+                        ${poin >= 150 ? `<button onclick="unduhPiagamBerlian('${student.id}')" class="bg-cyan-600 hover:bg-cyan-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 text-sm shadow-md transition active:scale-95"><i class="fas fa-award text-lg"></i> UNDUH PIAGAM BERLIAN 💎</button>` : ''}
                         <button onclick="resumeAfterSave()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl font-bold mt-2 text-sm transition">Batal / Lanjut Scan</button>
                     </div>
                 </div>
@@ -1509,6 +1713,7 @@
                     <div class="px-4 py-2 rounded-xl border text-xs font-black mb-5 ${newBadge.overlayClass}">
                         ${newBadge.label} • ⭐ ${newPoin} Poin
                     </div>
+                    ${newPoin >= 150 ? `<button onclick="unduhPiagamBerlian('${studentId}')" class="bg-cyan-900 hover:bg-cyan-950 text-cyan-200 px-5 py-2.5 rounded-xl font-bold w-full shadow-lg mb-2.5 text-xs transition flex items-center justify-center gap-2"><i class="fas fa-download"></i> Unduh Piagam Lencana Berlian 💎</button>` : ''}
                     <button onclick="resumeAfterSave()" class="bg-white ${type === 'Prestasi' ? 'text-emerald-600' : 'text-red-600'} px-6 py-3 rounded-xl font-bold w-full shadow-lg transition transform hover:scale-105 active:scale-95"><i class="fas fa-camera mr-2"></i> Lanjut Scan</button>
                 </div>
             `;
@@ -1764,11 +1969,14 @@
 
                     let sPoin = getStudentPoints(s.id);
                     let sBadge = getStudentBadge(sPoin);
+                    let piagamBerlianBtn = sPoin >= 150
+                        ? `<button onclick="unduhPiagamBerlian('${s.id}')" class="ml-1 inline-flex items-center gap-1 bg-cyan-600 hover:bg-cyan-700 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm transition" title="Unduh Piagam Lencana Berlian"><i class="fas fa-award"></i> Piagam</button>`
+                        : '';
                     
                     tbody += `<tr class="hover:bg-slate-50 bg-white border-b">
                         <td class="p-3 text-center">${i+1}</td>
                         <td class="p-3 text-center flex justify-center">${photoHtml}</td>
-                        <td class="p-3 font-semibold">${s.name}<br><span class="text-xs text-gray-500 font-mono">NISN: ${s.nis}</span><div class="mt-1"><span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-black border ${sBadge.pillClass}">${sBadge.shortLabel} • ⭐ ${sPoin}</span></div></td>
+                        <td class="p-3 font-semibold">${s.name}<br><span class="text-xs text-gray-500 font-mono">NISN: ${s.nis}</span><div class="mt-1 flex flex-wrap items-center gap-1"><span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-black border ${sBadge.pillClass}">${sBadge.shortLabel} • ⭐ ${sPoin}</span>${piagamBerlianBtn}</div></td>
                         <td class="p-3 text-center font-bold text-emerald-700 bg-emerald-50">${s.class}</td>
                         <td class="p-3"><div class="flex items-center gap-2"><i class="fab fa-whatsapp text-green-500 text-lg"></i><input type="number" id="phone_${s.id}" class="border rounded p-2 text-sm w-full md:w-48 outline-none focus:border-emerald-500 font-mono" value="${s.parentPhone || ''}" placeholder="Cth: 0812345..."><button onclick="savePhone('${s.id}')" class="bg-slate-200 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 px-3 py-2 rounded font-bold transition shadow-sm"><i class="fas fa-save"></i></button></div></td>
                         <td class="p-3 text-center"><div class="flex flex-col gap-1 items-center"><button onclick="generateSingleQR('${s.id}')" class="bg-slate-800 hover:bg-slate-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-print mr-1"></i> Cetak</button><button onclick="downloadSinglePNG('${s.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white w-full py-1.5 rounded text-xs font-bold transition shadow"><i class="fas fa-image mr-1"></i> PNG</button></div></td>
